@@ -84,7 +84,7 @@ function supply_data(array $user): array
 
     $customerProducts = $pairs('SELECT customer_id, product_id FROM customer_products', 'customer_id', 'product_id', 'intval');
     $history = [];
-    foreach ($pdo->query('SELECT customer_id, DATE_FORMAT(month, "%Y-%m") AS month, quantity_mt, dispatches FROM customer_supply_history ORDER BY month')->fetchAll() as $h) {
+    foreach ($pdo->query("SELECT customer_id, DATE_FORMAT(month, '%Y-%m') AS month, quantity_mt, dispatches FROM customer_supply_history ORDER BY month")->fetchAll() as $h) {
         $history[$h['customer_id']][] = ['month' => $h['month'], 'quantityMt' => (int) $h['quantity_mt'], 'dispatches' => (int) $h['dispatches']];
     }
     $customers = array_map(fn ($c) => [

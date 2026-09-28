@@ -78,5 +78,6 @@ try {
     respond(['error' => $e->getMessage()], 422);
 } catch (Throwable $e) {
     error_log('[supply-network] ' . $e);
-    respond(['error' => 'Something went wrong. Please try again.'], 500);
+    // Admins get the real reason so problems on the live server can be diagnosed.
+    respond(['error' => $user['role'] === 'admin' ? 'Server error: ' . $e->getMessage() : 'Something went wrong. Please try again.'], 500);
 }

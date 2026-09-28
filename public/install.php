@@ -98,7 +98,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $mode !== 'done') {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Install · Supply Network</title>
-  <link rel="stylesheet" href="assets/styles.css">
+  <link rel="stylesheet" href="<?= asset_url('assets/styles.css') ?>">
 </head>
 <body>
   <section class="login" style="grid-template-columns:1fr">

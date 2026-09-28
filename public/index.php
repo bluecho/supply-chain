@@ -16,7 +16,7 @@ if (!schema_ready()) {
     }
     http_response_code(503);
     exit('<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Updating</title>'
-        . '<link rel="stylesheet" href="assets/styles.css"><section class="login" style="grid-template-columns:1fr"><div class="login-card">'
+        . '<link rel="stylesheet" href="' . asset_url('assets/styles.css') . '"><section class="login" style="grid-template-columns:1fr"><div class="login-card">'
         . '<h2>We are updating the site</h2><p class="muted">Please check back in a few minutes.</p></div></section>');
 }
 $company = site_content()['company_name'] ?: (config()['app_name'] ?? 'Supply Network');
@@ -44,7 +44,7 @@ if ($admin) {
   <title><?= e($company) ?> · Supply Network</title>
   <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="assets/vendor/leaflet/leaflet.css">
-  <link rel="stylesheet" href="assets/styles.css">
+  <link rel="stylesheet" href="<?= asset_url('assets/styles.css') ?>">
 </head>
 <body class="<?= $admin ? 'is-admin' : 'is-viewer' ?>">
   <header class="topbar">
@@ -217,6 +217,6 @@ if ($admin) {
   </main>
 
   <script src="assets/vendor/leaflet/leaflet.js"></script>
-  <script src="assets/app.js"></script>
+  <script src="<?= asset_url('assets/app.js') ?>"></script>
 </body>
 </html>

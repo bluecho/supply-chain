@@ -80,6 +80,13 @@ function redirect(string $to): never
     exit;
 }
 
+/** Asset URL with a version stamp, so browsers fetch the new file after an update instead of a cached copy. */
+function asset_url(string $path): string
+{
+    $file = __DIR__ . '/../public/' . $path;
+    return e($path) . (is_file($file) ? '?v=' . filemtime($file) : '');
+}
+
 function send_security_headers(): void
 {
     header('X-Content-Type-Options: nosniff');

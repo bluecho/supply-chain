@@ -21,7 +21,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 }
-$appName = config()['app_name'] ?? 'Supply Network';
+try {
+    $content = site_content();
+} catch (PDOException) {
+    $content = [];
+}
+$appName = ($content['company_name'] ?? '') ?: (config()['app_name'] ?? 'Supply Network');
+$heroTitle = ($content['hero_title'] ?? '') ?: 'Our Integrated Wood Biomass Supply Network';
+$heroSub = ($content['hero_subtitle'] ?? '') ?: 'Reliable sourcing, processing and supply of quality wood chips and biomass materials.';
 ?>
 <!doctype html>
 <html lang="en">
@@ -36,12 +43,12 @@ $appName = config()['app_name'] ?? 'Supply Network';
   <section class="login">
     <div class="login-hero">
       <div class="brand brand-lg"><span class="brand-mark"></span><span><?= e($appName) ?></span></div>
-      <h1>Raw material sourcing,<br>mapped end to end.</h1>
-      <p>Explore our vendor network across India and the routes that feed the mills we supply.</p>
+      <h1><?= e($heroTitle) ?></h1>
+      <p><?= e($heroSub) ?></p>
       <ul class="login-points">
-        <li>Live vendor map</li>
-        <li>Species-wise sourcing</li>
-        <li>Routes to mills</li>
+        <li>Sourcing locations</li>
+        <li>Chipping centers</li>
+        <li>Routes to the mill</li>
       </ul>
     </div>
     <form class="login-card" method="post" autocomplete="on">

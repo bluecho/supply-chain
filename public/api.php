@@ -29,20 +29,32 @@ if ($method === 'POST') {
     $body = json_decode(file_get_contents('php://input') ?: '[]', true) ?: [];
 }
 
-$adminActions = ['vendor_save', 'vendor_delete', 'users', 'user_create', 'user_delete', 'user_password'];
+$adminActions = ['asset_save', 'asset_delete', 'customer_save', 'customer_delete', 'content_save',
+    'users', 'user_create', 'user_delete', 'user_password'];
 if (in_array($action, $adminActions, true) && $user['role'] !== 'admin') {
     respond(['error' => 'Admin access required.'], 403);
 }
 
+$optionalId = fn ($v) => isset($v) && $v !== '' ? $v : null;
+
 try {
     switch ("$method $action") {
-        case 'GET network':
-            respond(network_for($user));
-        case 'POST vendor_save':
-            $id = isset($body['id']) && $body['id'] !== '' ? (int) $body['id'] : null;
-            respond(['id' => save_vendor($id, $body)]);
-        case 'POST vendor_delete':
-            delete_vendor((int) ($body['id'] ?? 0));
+        case 'GET data':
+            respond(supply_data($user));
+        case 'POST asset_save':
+            $id = $optionalId($body['id'] ?? null);
+            respond(['id' => save_asset($id === null ? null : (int) $id, $body)]);
+        case 'POST asset_delete':
+            delete_asset((int) ($body['id'] ?? 0));
+            respond(['ok' => true]);
+        case 'POST customer_save':
+            $id = $optionalId($body['id'] ?? null);
+            respond(['id' => save_customer($id === null ? null : (string) $id, $body)]);
+        case 'POST customer_delete':
+            delete_customer((string) ($body['id'] ?? ''));
+            respond(['ok' => true]);
+        case 'POST content_save':
+            save_content($body);
             respond(['ok' => true]);
         case 'GET users':
             respond(list_users());

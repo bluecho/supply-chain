@@ -9,7 +9,7 @@ return [
         'password' => 'db_password',
     ],
     'app_name' => 'Supply Network',
-    // Contact shown to customer (viewer) accounts on locked vendor details.
+    // Contact shown to customer (viewer) accounts on locked site details.
     'sales_contact' => 'sales@yourcompany.com',
     // Optional: your own map tile provider (e.g. MapTiler, Mapbox, Stadia) with its API key.
     // When set it becomes the default base map; the free layers stay available as fallbacks.

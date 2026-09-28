@@ -9,7 +9,21 @@ if ($user === null) {
     redirect('login.php');
 }
 $admin = $user['role'] === 'admin';
-$appName = config()['app_name'] ?? 'Supply Network';
+$company = site_content()['company_name'] ?: (config()['app_name'] ?? 'Supply Network');
+$tabs = [
+    'dashboard'      => 'Dashboard',
+    'network'        => 'Supply Network',
+    'assets'         => 'Assets',
+    'materials'      => 'Materials',
+    'processing'     => 'Processing',
+    'logistics'      => 'Logistics',
+    'customers'      => 'Customers',
+    'sustainability' => 'Sustainability',
+    'about'          => 'About Us',
+];
+if ($admin) {
+    $tabs['admin'] = 'Admin';
+}
 ?>
 <!doctype html>
 <html lang="en">
@@ -17,20 +31,14 @@ $appName = config()['app_name'] ?? 'Supply Network';
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="csrf-token" content="<?= e(csrf_token()) ?>">
-  <title><?= e($appName) ?></title>
+  <title><?= e($company) ?> · Supply Network</title>
   <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="assets/vendor/leaflet/leaflet.css">
   <link rel="stylesheet" href="assets/styles.css">
 </head>
 <body class="<?= $admin ? 'is-admin' : 'is-viewer' ?>">
   <header class="topbar">
-    <div class="brand"><span class="brand-mark"></span><span><?= e($appName) ?></span></div>
-    <nav class="tabs" id="tabs">
-      <a href="#overview" data-tab="overview">Overview</a>
-      <a href="#vendors" data-tab="vendors">Vendors</a>
-      <a href="#materials" data-tab="materials">Materials</a>
-      <?php if ($admin): ?><a href="#admin" data-tab="admin">Admin</a><?php endif; ?>
-    </nav>
+    <a class="brand" href="#dashboard"><span class="brand-mark"></span><span><?= e($company) ?></span></a>
     <div class="user-box">
       <span class="role-badge <?= $admin ? 'admin' : '' ?>"><?= $admin ? 'Admin' : 'Customer view' ?></span>
       <span class="user-name"><?= e($user['display_name']) ?></span>
@@ -39,64 +47,148 @@ $appName = config()['app_name'] ?? 'Supply Network';
         <button class="btn btn-ghost-light" type="submit">Sign out</button>
       </form>
     </div>
+    <nav class="tabs" id="tabs">
+      <?php foreach ($tabs as $id => $label): ?>
+        <a href="#<?= $id ?>" data-tab="<?= $id ?>"><?= e($label) ?></a>
+      <?php endforeach; ?>
+    </nav>
   </header>
 
   <main>
-    <div class="page" data-page="overview">
-      <?php if (!$admin): ?>
-        <div class="banner">
-          <span class="lock-ico" aria-hidden="true"></span>
-          <span>You're viewing our supply network in <b>customer view</b>. Vendor names and contact details are kept confidential.</span>
+    <!-- Dashboard -->
+    <div class="page" data-page="dashboard">
+      <section class="hero card">
+        <div>
+          <p class="eyebrow" id="hero-company"></p>
+          <h1 id="hero-title"></h1>
+          <p id="hero-subtitle" class="hero-sub"></p>
+          <p id="hero-statement" class="statement"></p>
+          <div class="hero-actions">
+            <a class="btn btn-primary" href="#network">Explore the supply network</a>
+            <a class="btn" href="#logistics">Trace a supply route</a>
+          </div>
         </div>
-      <?php endif; ?>
+        <div class="hero-org" id="hero-org"></div>
+      </section>
       <div class="kpis" id="kpis"></div>
-
-      <div class="toolbar">
-        <div class="chips" id="material-chips"></div>
-        <div class="search"><input id="search" type="search" placeholder="Search region, district or state"></div>
-      </div>
-
       <div class="map-grid">
         <div class="card map-card">
-          <div id="map"></div>
-          <div class="legend" id="legend"></div>
+          <div class="card-head"><h3>Supply network map</h3><span class="muted">Our assets and the mills we supply</span></div>
+          <div id="dash-map" class="map map-sm"></div>
+          <div class="legend" data-legend></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h3>Assets by type</h3></div>
+          <div class="type-list" id="dash-types"></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h3>From wood to industrial biomass</h3><span class="muted">How material moves through our supply chain</span></div>
+        <div class="flow" data-flow></div>
+      </div>
+    </div>
+
+    <!-- Supply network map -->
+    <div class="page" data-page="network">
+      <div class="page-head"><h2>Our supply network</h2><span class="muted">Every location is our own sourcing, processing, aggregation or logistics asset</span></div>
+      <div class="filters card">
+        <div class="filter-row"><span class="filter-label">Asset type</span><div class="chips" id="f-type"></div></div>
+        <div class="filter-row"><span class="filter-label">Material</span><div class="chips" id="f-material"></div></div>
+        <div class="filter-row"><span class="filter-label">Product type</span><div class="chips" id="f-form"></div></div>
+        <div class="filter-row"><span class="filter-label">Search</span><input id="f-search" type="search" placeholder="Asset, region, district or state"></div>
+      </div>
+      <div class="map-grid">
+        <div class="card map-card">
+          <div id="net-map" class="map"></div>
+          <div class="legend" data-legend></div>
         </div>
         <aside class="card side-panel" id="side-panel"></aside>
       </div>
-
-      <div class="card">
-        <div class="card-head"><h3>Supply journey</h3><span class="muted">How material moves from our vendors to the mill</span></div>
-        <div class="journey" id="journey"></div>
-      </div>
-
-      <div class="card">
-        <div class="card-head"><h3>Vendor network</h3><span class="muted" id="table-count"></span></div>
-        <div class="table-wrap"><table class="table" id="vendor-table"></table></div>
-      </div>
     </div>
 
-    <div class="page" data-page="vendors">
-      <div class="page-head"><h2>Vendor sites</h2><span class="muted" id="vendors-sub"></span></div>
-      <div class="vendor-grid" id="vendor-grid"></div>
+    <!-- Assets -->
+    <div class="page" data-page="assets">
+      <div class="page-head"><h2>Our assets</h2><span class="muted" id="assets-sub"></span></div>
+      <div id="asset-groups" class="groups"></div>
     </div>
 
+    <!-- Asset profile -->
+    <div class="page" data-page="asset">
+      <div id="asset-profile"></div>
+    </div>
+
+    <!-- Materials -->
     <div class="page" data-page="materials">
-      <div class="page-head"><h2>Material catalogue</h2><span class="muted">Species and product forms we source</span></div>
+      <div class="page-head"><h2>Our material portfolio</h2><span class="muted">Four wood species, supplied in debarked, with-bark and core-chip forms</span></div>
       <div class="material-grid" id="material-grid"></div>
+    </div>
+
+    <!-- Processing -->
+    <div class="page" data-page="processing">
+      <div class="page-head"><h2>Processing</h2><span class="muted">Debarking, chipping, screening and quality control at our own centers</span></div>
+      <div class="card"><div class="flow" data-flow></div></div>
+      <div class="cap-grid" id="cap-grid"></div>
+      <div class="card">
+        <div class="card-head"><h3>Processing assets</h3><span class="muted" id="proc-sub"></span></div>
+        <div class="table-wrap"><table class="table" id="proc-table"></table></div>
+      </div>
+    </div>
+
+    <!-- Logistics -->
+    <div class="page" data-page="logistics">
+      <div class="page-head"><h2>Logistics &amp; supply routes</h2><span class="muted">Pick a product and a customer to trace how it reaches the mill</span></div>
+      <div class="filters card">
+        <div class="filter-row"><span class="filter-label">Product</span><select id="l-product"></select></div>
+        <div class="filter-row"><span class="filter-label">Customer</span><select id="l-customer"></select></div>
+      </div>
+      <div class="map-grid">
+        <div class="card map-card">
+          <div id="log-map" class="map"></div>
+        </div>
+        <aside class="card side-panel" id="route-panel"></aside>
+      </div>
+      <div class="kpis" id="log-kpis"></div>
+    </div>
+
+    <!-- Customers -->
+    <div class="page" data-page="customers">
+      <div class="page-head"><h2>Our customers</h2><span class="muted">Mills supplied from our network</span></div>
+      <div id="customer-list" class="customer-list"></div>
+    </div>
+
+    <!-- Sustainability -->
+    <div class="page" data-page="sustainability">
+      <div class="page-head"><h2>Sustainability</h2><span class="muted">Responsible sourcing across our network</span></div>
+      <div class="sus-grid" id="sus-grid"></div>
+    </div>
+
+    <!-- About -->
+    <div class="page" data-page="about">
+      <div class="about-grid">
+        <div class="card prose" id="about-body"></div>
+        <div class="card" id="about-contact"></div>
+      </div>
     </div>
 
     <?php if ($admin): ?>
     <div class="page" data-page="admin">
-      <div class="page-head">
-        <h2>Admin</h2>
-        <button class="btn btn-primary" id="add-vendor" type="button">+ Add vendor</button>
+      <div class="page-head"><h2>Supply network management</h2></div>
+      <div class="card">
+        <div class="card-head"><h3>Assets</h3><span class="muted">Locations, capabilities, products handled and outgoing routes</span>
+          <button class="btn btn-primary head-btn" data-add-asset type="button">+ Add asset</button></div>
+        <div class="table-wrap"><table class="table" id="admin-assets"></table></div>
       </div>
       <div class="card">
-        <div class="card-head"><h3>Vendors</h3><span class="muted">Full details, including confidential contacts</span></div>
-        <div class="table-wrap"><table class="table" id="admin-vendor-table"></table></div>
+        <div class="card-head"><h3>Customers</h3><span class="muted">Destinations, products supplied and monthly supply history</span>
+          <button class="btn btn-primary head-btn" data-add-customer type="button">+ Add customer</button></div>
+        <div class="table-wrap"><table class="table" id="admin-customers"></table></div>
       </div>
       <div class="card">
-        <div class="card-head"><h3>User accounts</h3><span class="muted">Admins see everything. Viewers (customers) see the network with vendor details hidden.</span></div>
+        <div class="card-head"><h3>Site content</h3><span class="muted">Text shown on the Dashboard, Sustainability and About Us pages</span></div>
+        <form id="content-form" class="content-form"></form>
+      </div>
+      <div class="card">
+        <div class="card-head"><h3>User accounts</h3><span class="muted">Admins see everything. Viewers (customers) see the network with internal site details hidden.</span></div>
         <form id="user-form" class="inline-form">
           <input name="username" placeholder="Username" required>
           <input name="displayName" placeholder="Display name (e.g. company)">
@@ -109,45 +201,8 @@ $appName = config()['app_name'] ?? 'Supply Network';
       </div>
     </div>
 
-    <dialog id="vendor-dialog">
-      <form id="vendor-form" method="dialog">
-        <h3 id="vendor-dialog-title">Edit vendor</h3>
-        <fieldset>
-          <legend>Location &amp; supply (visible to customers)</legend>
-          <div class="form-grid">
-            <label>Region / village<input name="region" required></label>
-            <label>District<input name="district"></label>
-            <label>State<input name="state"></label>
-            <label>Status<select name="status"><option>Active</option><option>Onboarding</option><option>Inactive</option></select></label>
-            <label class="span-2">Paste a Google Maps link to fill the coordinates<input name="mapsPaste" placeholder="https://www.google.com/maps?q=27.73,81.14"></label>
-            <label>Latitude<input name="lat" type="number" step="any" required></label>
-            <label>Longitude<input name="lng" type="number" step="any" required></label>
-            <label>Capacity (MT / month)<input name="capacityMt" type="number" min="0"></label>
-            <label>Trucks / month<input name="trucksPerMonth" type="number" min="0"></label>
-            <label>Active since (year)<input name="activeSince" type="number" min="1900" max="2100"></label>
-          </div>
-          <div class="check-row" id="dlg-materials"></div>
-          <div class="check-row" id="dlg-customers"></div>
-        </fieldset>
-        <fieldset>
-          <legend>Confidential (admins only)</legend>
-          <div class="form-grid">
-            <label>Vendor name<input name="c.name"></label>
-            <label>Contact person<input name="c.person"></label>
-            <label>Phone<input name="c.phone"></label>
-            <label>Email<input name="c.email" type="email"></label>
-            <label class="span-2">Address<input name="c.address"></label>
-            <label>GSTIN<input name="c.gstin"></label>
-            <label>Google Maps link<input name="c.mapsUrl"></label>
-          </div>
-        </fieldset>
-        <p id="vendor-error" class="error" role="alert"></p>
-        <div class="dialog-actions">
-          <button class="btn" value="cancel" formnovalidate type="submit">Cancel</button>
-          <button class="btn btn-primary" id="vendor-save" type="button">Save vendor</button>
-        </div>
-      </form>
-    </dialog>
+    <dialog id="asset-dialog"><form id="asset-form" method="dialog" class="dlg-form"></form></dialog>
+    <dialog id="customer-dialog"><form id="customer-form" method="dialog" class="dlg-form"></form></dialog>
     <?php endif; ?>
   </main>
 

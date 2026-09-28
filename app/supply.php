@@ -41,7 +41,7 @@ const PRIVATE_FIELDS = [
 ];
 
 const CONTENT_KEYS = ['company_name', 'hero_title', 'hero_subtitle', 'company_statement', 'about', 'sustainability',
-    'contact_email', 'contact_phone', 'contact_address'];
+    'contact_email', 'contact_phone', 'contact_address', 'eudr_intro', 'eudr_points'];
 
 /** False until install.php has created (or upgraded to) the asset-based tables. */
 function schema_ready(): bool
@@ -50,6 +50,9 @@ function schema_ready(): bool
     if ($ready === null) {
         $stmt = db()->query("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name IN ('assets', 'site_content')");
         $ready = (int) $stmt->fetchColumn() === 2;
+        if ($ready) {
+            run_migrations();
+        }
     }
     return $ready;
 }
@@ -135,16 +138,52 @@ function supply_data(array $user): array
         ];
     }
 
-    $links = array_map(fn ($l) => [
-        'from'       => (int) $l['from_asset_id'],
-        'toAsset'    => $intOrNull($l['to_asset_id']),
-        'toCustomer' => $l['to_customer_id'],
-    ], $pdo->query('SELECT from_asset_id, to_asset_id, to_customer_id FROM supply_links')->fetchAll());
+    $assetPos = [];
+    foreach ($pdo->query('SELECT id, lat, lng FROM assets')->fetchAll() as $a) {
+        $assetPos[(int) $a['id']] = [(float) $a['lat'], (float) $a['lng']];
+    }
+    $links = [];
+    foreach ($pdo->query('SELECT id, from_asset_id, to_asset_id, to_customer_id, road_geometry, road_km, road_minutes, route_error FROM supply_links ORDER BY id')->fetchAll() as $l) {
+        $road = $l['road_geometry'] ? json_decode($l['road_geometry'], true) : null;
+        if ($road && !$admin && isset($assetPos[(int) $l['from_asset_id']])) {
+            $toAsset = $l['to_asset_id'] !== null ? ($assetPos[(int) $l['to_asset_id']] ?? null) : null;
+            $road = trim_route_for_viewer($road, $assetPos[(int) $l['from_asset_id']], $toAsset);
+        }
+        $links[] = [
+            'id'          => (int) $l['id'],
+            'from'        => (int) $l['from_asset_id'],
+            'toAsset'     => $intOrNull($l['to_asset_id']),
+            'toCustomer'  => $l['to_customer_id'],
+            'road'        => $road,
+            'roadKm'      => $l['road_km'] !== null ? (float) $l['road_km'] : null,
+            'roadMinutes' => $intOrNull($l['road_minutes']),
+            'routeError'  => $admin ? $l['route_error'] : null,
+        ];
+    }
+
+    // Transit weight loss and yard weights are internal: viewers get delivered tonnes, trucks and transit time.
+    $supplyLog = array_map(fn ($r) => [
+        'customer'      => $r['customer_id'],
+        'product'       => $intOrNull($r['product_id']),
+        'label'         => $r['material_label'],
+        'month'         => $r['month'],
+        'trucks'        => (int) $r['trucks'],
+        'deliveredMt'   => (float) $r['delivered_mt'],
+        'transitDays'   => (int) $r['transit_days_sum'],
+        'transitTrips'  => (int) $r['transit_trips'],
+    ] + ($admin ? [
+        'dispatchedMt'  => (float) $r['dispatched_mt'],
+        'lossMt'        => (float) $r['loss_mt'],
+        'lossBaseMt'    => (float) $r['loss_base_mt'],
+        'sourceFile'    => $r['source_file'],
+    ] : []), $pdo->query("SELECT customer_id, product_id, material_label, DATE_FORMAT(month, '%Y-%m') AS month, trucks, delivered_mt, dispatched_mt,
+        loss_mt, loss_base_mt, transit_days_sum, transit_trips, source_file FROM supply_log ORDER BY month, material_label")->fetchAll());
 
     return [
         'app' => [
             'salesContact' => config()['sales_contact'] ?? '',
             'mapTiles'     => config()['map_tiles'] ?? null,
+            'routing'      => routing_config()['enabled'],
         ],
         'content'      => site_content(),
         'user'         => ['username' => $user['username'], 'displayName' => $user['display_name'], 'role' => $user['role']],
@@ -157,6 +196,7 @@ function supply_data(array $user): array
         'customers'    => $customers,
         'assets'       => $assets,
         'links'        => $links,
+        'supplyLog'    => $supplyLog,
     ];
 }
 
@@ -263,14 +303,29 @@ function save_asset(?int $id, array $in): int
         // Outgoing supply routes from this asset.
         $validAssets = array_map('intval', $pdo->query('SELECT id FROM assets')->fetchAll(PDO::FETCH_COLUMN));
         $toAssets = array_values(array_filter(array_intersect($toAssets, $validAssets), fn ($a) => $a !== $id));
-        $pdo->prepare('DELETE FROM supply_links WHERE from_asset_id = ?')->execute([$id]);
+        // Only add/remove the links that changed, so cached road routes are kept.
+        $current = $pdo->prepare('SELECT id, to_asset_id, to_customer_id FROM supply_links WHERE from_asset_id = ?');
+        $current->execute([$id]);
+        $keep = [];
+        foreach ($current->fetchAll() as $l) {
+            $wanted = $l['to_asset_id'] !== null ? in_array((int) $l['to_asset_id'], $toAssets, true) : in_array($l['to_customer_id'], $toCustomers, true);
+            if ($wanted) {
+                $keep[] = $l['to_asset_id'] !== null ? 'a' . $l['to_asset_id'] : 'c' . $l['to_customer_id'];
+            } else {
+                $pdo->prepare('DELETE FROM supply_links WHERE id = ?')->execute([$l['id']]);
+            }
+        }
         $insA = $pdo->prepare('INSERT INTO supply_links (from_asset_id, to_asset_id) VALUES (?, ?)');
         foreach ($toAssets as $a) {
-            $insA->execute([$id, $a]);
+            if (!in_array("a$a", $keep, true)) {
+                $insA->execute([$id, $a]);
+            }
         }
         $insC = $pdo->prepare('INSERT INTO supply_links (from_asset_id, to_customer_id) VALUES (?, ?)');
         foreach ($toCustomers as $c) {
-            $insC->execute([$id, $c]);
+            if (!in_array("c$c", $keep, true)) {
+                $insC->execute([$id, $c]);
+            }
         }
         $pdo->commit();
     } catch (Throwable $e) {

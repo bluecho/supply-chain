@@ -73,6 +73,7 @@ if ($admin) {
           <h1 id="hero-title"></h1>
           <p id="hero-subtitle" class="hero-sub"></p>
           <p id="hero-statement" class="statement"></p>
+          <div id="hero-eudr"></div>
           <div class="hero-actions">
             <a class="btn btn-primary" href="#network">Explore the supply network</a>
             <a class="btn" href="#logistics">Trace a supply route</a>
@@ -81,6 +82,7 @@ if ($admin) {
         <div class="hero-org" id="hero-org"></div>
       </section>
       <div class="kpis" id="kpis"></div>
+      <section class="card" id="supply-record" hidden></section>
       <div class="map-grid">
         <div class="card map-card">
           <div class="card-head"><h3>Supply network map</h3><span class="muted">Our assets and the mills we supply</span></div>
@@ -169,6 +171,7 @@ if ($admin) {
     <!-- Sustainability -->
     <div class="page" data-page="sustainability">
       <div class="page-head"><h2>Sustainability</h2><span class="muted">Responsible sourcing across our network</span></div>
+      <section class="card eudr" id="eudr"></section>
       <div class="sus-grid" id="sus-grid"></div>
     </div>
 
@@ -192,6 +195,25 @@ if ($admin) {
         <div class="card-head"><h3>Customers</h3><span class="muted">Destinations, products supplied and monthly supply history</span>
           <button class="btn btn-primary head-btn" data-add-customer type="button">+ Add customer</button></div>
         <div class="table-wrap"><table class="table" id="admin-customers"></table></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h3>Supply data</h3><span class="muted">Import the dispatch log book (.xlsx). Only monthly totals are stored, never truck, driver, transporter or payment details.</span></div>
+        <div class="import-box">
+          <form id="import-form" class="inline-form">
+            <input type="file" name="file" accept=".xlsx" required>
+            <button class="btn btn-primary" type="submit">Read workbook</button>
+          </form>
+          <div id="import-preview"></div>
+          <p class="error" id="import-error"></p>
+          <div id="import-current"></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h3>Road routes</h3><span class="muted">Truck routes by road, calculated once per supply link and stored</span>
+          <button class="btn head-btn" data-routes-refresh type="button">Calculate missing routes</button>
+          <button class="btn" data-routes-refresh="force" type="button">Recalculate all</button></div>
+        <p class="error" id="routes-error" style="padding:0 18px"></p>
+        <div class="table-wrap"><table class="table" id="admin-routes"></table></div>
       </div>
       <div class="card">
         <div class="card-head"><h3>Site content</h3><span class="muted">Text shown on the Dashboard, Sustainability and About Us pages</span></div>

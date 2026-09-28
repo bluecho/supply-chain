@@ -30,10 +30,12 @@ if ($method === 'POST') {
     if (!csrf_valid($_SERVER['HTTP_X_CSRF_TOKEN'] ?? null)) {
         respond(['error' => 'Your session expired. Please reload the page.'], 419);
     }
-    $body = json_decode(file_get_contents('php://input') ?: '[]', true) ?: [];
+    $body = str_starts_with($_SERVER['CONTENT_TYPE'] ?? '', 'multipart/form-data') ? $_POST
+        : (json_decode(file_get_contents('php://input') ?: '[]', true) ?: []);
 }
 
 $adminActions = ['asset_save', 'asset_delete', 'customer_save', 'customer_delete', 'content_save',
+    'routes_refresh', 'import_preview', 'import_commit', 'import_clear',
     'users', 'user_create', 'user_delete', 'user_password'];
 if (in_array($action, $adminActions, true) && $user['role'] !== 'admin') {
     respond(['error' => 'Admin access required.'], 403);
@@ -47,13 +49,25 @@ try {
             respond(supply_data($user));
         case 'POST asset_save':
             $id = $optionalId($body['id'] ?? null);
-            respond(['id' => save_asset($id === null ? null : (int) $id, $body)]);
+            $id = save_asset($id === null ? null : (int) $id, $body);
+            respond(['id' => $id, 'routes' => refresh_routes(assetId: $id)]);
         case 'POST asset_delete':
             delete_asset((int) ($body['id'] ?? 0));
             respond(['ok' => true]);
         case 'POST customer_save':
             $id = $optionalId($body['id'] ?? null);
-            respond(['id' => save_customer($id === null ? null : (string) $id, $body)]);
+            $id = save_customer($id === null ? null : (string) $id, $body);
+            respond(['id' => $id, 'routes' => refresh_routes(customerId: $id)]);
+        case 'POST routes_refresh':
+            @set_time_limit(300);
+            respond(refresh_routes(force: !empty($body['force'])));
+        case 'POST import_preview':
+            respond(import_preview($_FILES['file'] ?? []));
+        case 'POST import_commit':
+            respond(import_commit((string) ($body['customerId'] ?? ''), (array) ($body['sheets'] ?? [])));
+        case 'POST import_clear':
+            clear_supply_log((string) ($body['customerId'] ?? ''));
+            respond(['ok' => true]);
         case 'POST customer_delete':
             delete_customer((string) ($body['id'] ?? ''));
             respond(['ok' => true]);

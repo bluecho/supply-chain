@@ -31,6 +31,8 @@
     recycle: svg('<path d="M7 19H4.8a1.8 1.8 0 0 1-1.6-2.7L5 13M11 19h8.2a1.8 1.8 0 0 0 1.6-2.7l-1.4-2.4M14 16l-3 3 3 3M8.3 6.7 9.6 4.4a1.8 1.8 0 0 1 3 0l4.2 7.3M13.5 11.7l3.3.2.9-3.3M5 13l-1-4 4 1"/>'),
     lock: svg('<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>'),
     arrow: svg('<path d="M5 12h14M13 6l6 6-6 6"/>'),
+    pin: svg('<path d="M12 22s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12z"/><circle cx="12" cy="10" r="2.5"/>'),
+    map: svg('<path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2zM9 4v14M15 6v14"/>'),
   };
   const CAP_INFO = {
     procurement: 'Buying plantation and agro-forestry wood from growers',
@@ -112,11 +114,24 @@
     return 2 * R * Math.asin(Math.sqrt(h));
   }
 
-  function pathDistance(p) {
+  const linkOf = (key) => D().links.find((l) => linkKey(l) === key);
+
+  /** Distance of a complete route: road km where every leg has been routed, else straight-line. */
+  function pathInfo(p) {
     const pts = [...p.assets.map(assetById), customerById(p.customer)];
-    let d = 0;
-    for (let i = 0; i < pts.length - 1; i++) d += distanceKm(pts[i], pts[i + 1]);
-    return d;
+    const legs = pathLinks(p).map(linkOf);
+    const road = legs.every((l) => l && l.roadKm != null);
+    let km = 0, minutes = 0;
+    legs.forEach((l, i) => {
+      if (road) { km += l.roadKm; minutes += l.roadMinutes || 0; } else km += distanceKm(pts[i], pts[i + 1]);
+    });
+    return { km, minutes, road };
+  }
+  const pathDistance = (p) => pathInfo(p).km;
+  const hours = (min) => (min >= 90 ? `${fmt(Math.round(min / 60))} h` : `${fmt(min)} min`);
+  function distLabel(p) {
+    const i = pathInfo(p);
+    return i.road ? `~${fmt(Math.round(i.km))} km by road · ~${hours(i.minutes)} drive` : `~${fmt(Math.round(i.km))} km straight-line`;
   }
 
   // ---------- Small render helpers ----------
@@ -262,14 +277,16 @@
       if (!from || !to || (l.toAsset && !visible.has(l.toAsset))) return;
       const key = linkKey(l);
       const on = !highlight || highlight.has(key);
-      const pts = curve(from, to);
+      const pts = l.road && l.road.length > 1 ? l.road : curve(from, to);
       if (on) { involved.add(`a${l.from}`); involved.add(l.toAsset ? `a${l.toAsset}` : `c${l.toCustomer}`); }
-      L.polyline(pts, {
+      const line = L.polyline(pts, {
         color: highlight && on ? '#1b3478' : '#2f6fe4',
-        weight: highlight && on ? 3.5 : 2,
+        weight: highlight && on ? 4 : 2.5,
         opacity: on ? 0.85 : 0.15,
-        className: on ? 'route' : '',
+        className: on ? (l.road ? 'route road' : 'route') : '',
       }).addTo(m.routes);
+      line.bindTooltip(`<b>${esc(from.name)} → ${esc(to.name)}</b><br>${l.roadKm != null ? `~${fmt(Math.round(l.roadKm))} km by road · ~${hours(l.roadMinutes || 0)} drive` : 'Road route not calculated yet'}`,
+        { className: 'tip', sticky: true });
       if (trucks && on && highlight) truckPaths.push(pts);
     });
 
@@ -339,6 +356,7 @@
     $('#hero-title').textContent = c.hero_title;
     $('#hero-subtitle').textContent = c.hero_subtitle;
     $('#hero-statement').innerHTML = c.company_statement ? `${ICON.company}<span>${esc(c.company_statement)}</span>` : '';
+    $('#hero-eudr').innerHTML = c.eudr_intro ? `<a class="eudr-pill" href="#sustainability">${ICON.leaf}EUDR-compliant sourcing</a>` : '';
 
     const active = D().assets.filter((a) => a.status !== 'Inactive');
     const count = (t) => active.filter((a) => a.type === t).length;
@@ -549,7 +567,7 @@
           <span class="connect-arrow">${ICON.arrow}</span>
           <div class="connect-col"><div class="section-title">Sends to</div>${downstream.map((x) => (x.asset ? assetChip(x.asset) : customerChip(x.customer))).join('') || '<span class="muted">No outgoing route yet</span>'}</div>
         </div>
-        ${paths.length ? `<div class="paths"><div class="section-title">Complete routes to customers (straight-line distance)</div>${paths.map((p) => `<div class="path-row">${chain(p)}<span class="muted">~${fmt(Math.round(pathDistance(p)))} km</span></div>`).join('')}</div>` : ''}
+        ${paths.length ? `<div class="paths"><div class="section-title">Complete routes to customers</div>${paths.map((p) => `<div class="path-row">${chain(p)}<span class="muted">${distLabel(p)}</span></div>`).join('')}</div>` : ''}
       </div>
       <div class="profile-grid">
         <div class="card map-card"><div id="asset-map" class="map map-sm"></div></div>
@@ -631,18 +649,23 @@
         <span class="muted">${product ? esc(product.name) : 'All products'} → ${customer ? esc(customer.name) : 'all customers'}</span></div>
       <div class="panel-body">
         ${notTaken ? `<div class="banner small">${esc(customer.name)} is not currently supplied ${esc(product.name)}. Routes show where it could come from.</div>` : ''}
-        ${paths.map((p, i) => `<div class="route-card"><div class="route-num">Route ${i + 1}<span class="muted">~${fmt(Math.round(pathDistance(p)))} km straight-line</span></div>${chain(p)}</div>`).join('') ||
+        ${paths.map((p, i) => `<div class="route-card"><div class="route-num">Route ${i + 1}<span class="muted">${distLabel(p)}</span></div>${chain(p)}
+          ${isAdmin() ? `<a class="small link" href="${esc(directionsUrl(p))}" target="_blank" rel="noopener">Open truck route in Google Maps →</a>` : ''}</div>`).join('') ||
           '<p class="muted">No route in the network carries this combination yet.</p>'}
       </div>`;
 
-    const lastLeg = paths.map((p) => assetById(p.assets[p.assets.length - 1]));
-    const dists = paths.map(pathDistance);
+    const infos = paths.map(pathInfo);
+    const allRoad = infos.length && infos.every((i) => i.road);
+    const log = supplyStats(D().supplyLog.filter((r) => (!customer || r.customer === customer.id) && (!pid || !r.product || r.product === pid)));
     const items = [
       ['Routes shown', fmt(paths.length), '', ICON.route],
-      ['Dispatch points', fmt(uniq(lastLeg.map((a) => a.id)).length), '', ICON.logistics],
-      ['Trucks / month', fmt(sum(uniq(lastLeg), (a) => a.trucksPerMonth)), '', ICON.logistics],
-      ['Average distance', dists.length ? fmt(Math.round(sum(dists, (d) => d) / dists.length)) : '–', dists.length ? 'km' : '', ICON.scale],
+      [allRoad ? 'Average road distance' : 'Average distance', infos.length ? fmt(Math.round(sum(infos, (i) => i.km) / infos.length)) : '–', infos.length ? 'km' : '', ICON.map],
+      ['Average drive time', allRoad ? hours(Math.round(sum(infos, (i) => i.minutes) / infos.length)) : '–', '', ICON.logistics],
     ];
+    if (log.trucks) {
+      items.push(['Trucks delivered', fmt(log.trucks), log.period ? `· ${log.period}` : '', ICON.logistics]);
+      if (log.transitAvg != null) items.push(['Recorded dispatch → mill', log.transitAvg.toFixed(1), 'days', ICON.check]);
+    }
     $('#log-kpis').innerHTML = items.map(([label, value, unit, icon]) => `
       <div class="kpi"><div class="kpi-ico">${icon}</div><div class="kpi-label">${esc(label)}</div><div class="kpi-value">${value}${unit ? `<small>${esc(unit)}</small>` : ''}</div></div>`).join('');
 
@@ -656,6 +679,102 @@
         onAsset: (id) => { location.hash = `asset/${id}`; },
       });
     }
+  }
+
+  /** Google Maps driving directions through every stop of a route (admins only: exact coordinates). */
+  function directionsUrl(p) {
+    const stops = [...p.assets.map(assetById), customerById(p.customer)].map((n) => `${n.lat},${n.lng}`);
+    const q = new URLSearchParams({ api: '1', travelmode: 'driving', origin: stops[0], destination: stops[stops.length - 1] });
+    if (stops.length > 2) q.set('waypoints', stops.slice(1, -1).join('|'));
+    return `https://www.google.com/maps/dir/?${q}`;
+  }
+
+  // ---------- Supply record (imported dispatch log) ----------
+  const SERIES_COLORS = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#4a3aa7', '#e34948'];
+  const monthName = (m, long) => new Date(m + '-01T00:00:00').toLocaleString('en-IN', { month: long ? 'long' : 'short', year: long ? 'numeric' : undefined });
+  function seriesLabels() { return uniq(D().supplyLog.map((r) => r.label)).sort(); }
+  const seriesColor = (label) => SERIES_COLORS[Math.max(0, seriesLabels().indexOf(label)) % SERIES_COLORS.length];
+
+  function supplyStats(rows) {
+    const months = uniq(rows.map((r) => r.month)).sort();
+    const trucks = sum(rows, (r) => r.trucks);
+    const delivered = sum(rows, (r) => r.deliveredMt);
+    const trips = sum(rows, (r) => r.transitTrips);
+    const lossBase = sum(rows, (r) => r.lossBaseMt);
+    return {
+      rows, months, trucks, delivered,
+      avgLoad: trucks ? delivered / trucks : 0,
+      monthlyAvg: months.length ? delivered / months.length : 0,
+      transitAvg: trips ? sum(rows, (r) => r.transitDays) / trips : null,
+      lossPct: lossBase ? (sum(rows, (r) => r.lossMt) / lossBase) * 100 : null,
+      period: months.length ? `${monthName(months[0])} – ${monthName(months[months.length - 1])} ${months[months.length - 1].slice(0, 4)}` : '',
+    };
+  }
+
+  /** Stacked monthly bars, one colour per material, with hover details and a table view. */
+  function supplyChart(stats, title) {
+    const { rows, months } = stats;
+    if (!months.length) return '';
+    const labels = uniq(rows.map((r) => r.label)).sort();
+    const val = (m, l) => sum(rows.filter((r) => r.month === m && r.label === l), (r) => r.deliveredMt);
+    const trucksIn = (m) => sum(rows.filter((r) => r.month === m), (r) => r.trucks);
+    const W = 640, H = 220, pad = { l: 48, r: 8, t: 12, b: 26 };
+    const totals = months.map((m) => sum(labels, (l) => val(m, l)));
+    const max = Math.max(...totals, 1);
+    const step = Math.pow(10, Math.floor(Math.log10(max)));
+    const top = Math.ceil(max / step) * step;
+    const bw = (W - pad.l - pad.r) / months.length;
+    const barW = Math.max(6, Math.min(34, bw - 10));
+    const y = (v) => pad.t + (H - pad.t - pad.b) * (1 - v / top);
+    const grid = [0, 0.5, 1].map((f) => `<line x1="${pad.l}" x2="${W - pad.r}" y1="${y(top * f)}" y2="${y(top * f)}" class="grid"/><text x="${pad.l - 6}" y="${y(top * f) + 4}" text-anchor="end" class="axis">${fmt(top * f)}</text>`).join('');
+    const bars = months.map((m, i) => {
+      const x = pad.l + bw * i + (bw - barW) / 2;
+      let base = 0;
+      const present = labels.filter((l) => val(m, l) > 0);
+      const segs = present.map((l, k) => {
+        const v = val(m, l), y1 = y(base + v), y0 = y(base);
+        base += v;
+        const gap = k ? 2 : 0; // surface gap between stacked segments
+        const h = Math.max(0, y0 - y1 - gap);
+        const r = k === present.length - 1 ? Math.min(4, barW / 2, h) : 0;
+        const d = `M${x},${y1 + h} V${y1 + r} Q${x},${y1} ${x + r},${y1} H${x + barW - r} Q${x + barW},${y1} ${x + barW},${y1 + r} V${y1 + h} Z`;
+        return `<path d="${d}" style="fill:${seriesColor(l)}"/>`;
+      }).join('');
+      const tip = `${monthName(m, true)}: ${fmt(Math.round(totals[i]))} MT · ${fmt(trucksIn(m))} trucks` +
+        (labels.length > 1 ? ` (${present.map((l) => `${l} ${fmt(Math.round(val(m, l)))} MT`).join(', ')})` : '');
+      return `<g class="bar-g" data-tip="${esc(tip)}"><rect x="${pad.l + bw * i}" y="${pad.t}" width="${bw}" height="${H - pad.t - pad.b}" class="hit"/>${segs}
+        <text x="${x + barW / 2}" y="${H - 8}" text-anchor="middle" class="axis">${monthName(m)}</text></g>`;
+    }).join('');
+    const legend = labels.length > 1 ? `<div class="chart-legend">${labels.map((l) => `<span><i style="background:${seriesColor(l)}"></i>${esc(l)}</span>`).join('')}</div>` : '';
+    return `${legend}<div class="chart-wrap"><svg viewBox="0 0 ${W} ${H}" class="chart" role="img" aria-label="${esc(title)}">${grid}${bars}</svg><div class="chart-tip" hidden></div></div>
+      <details class="table-toggle"><summary>Show as table</summary><div class="table-wrap"><table class="table">
+        <thead><tr><th>Month</th>${labels.map((l) => `<th>${esc(l)} (MT)</th>`).join('')}<th>Total (MT)</th><th>Trucks</th></tr></thead>
+        <tbody>${months.map((m, i) => `<tr><td>${esc(monthName(m, true))}</td>${labels.map((l) => `<td>${fmt(Math.round(val(m, l)))}</td>`).join('')}<td><b>${fmt(Math.round(totals[i]))}</b></td><td>${fmt(trucksIn(m))}</td></tr>`).join('')}</tbody>
+      </table></div></details>`;
+  }
+
+  function supplyKpis(st) {
+    const items = [
+      ['Delivered', fmt(Math.round(st.delivered)), 'MT'],
+      ['Trucks delivered', fmt(st.trucks), ''],
+      ['Average per month', fmt(Math.round(st.monthlyAvg)), 'MT'],
+      ['Average load', st.avgLoad.toFixed(1), 'MT / truck'],
+    ];
+    if (st.transitAvg != null) items.push(['Dispatch → mill', st.transitAvg.toFixed(1), 'days']);
+    if (isAdmin() && st.lossPct != null) items.push(['Transit weight loss', st.lossPct.toFixed(1), '% · admin only']);
+    return `<div class="kpis kpis-4">${items.map(([l, v, u]) => `<div class="kpi"><div class="kpi-label">${esc(l)}</div><div class="kpi-value">${v}${u ? `<small>${esc(u)}</small>` : ''}</div></div>`).join('')}</div>`;
+  }
+
+  function renderSupplyRecord() {
+    const el = $('#supply-record');
+    const rows = D().supplyLog;
+    if (!rows.length) { el.hidden = true; return; }
+    el.hidden = false;
+    const byCustomer = uniq(rows.map((r) => r.customer)).map(customerById).filter(Boolean);
+    const st = supplyStats(rows);
+    el.innerHTML = `<div class="card-head"><h3>Supply record</h3><span class="muted">Deliveries to ${esc(byCustomer.map((c) => c.name).join(', '))} · ${esc(st.period)}</span>
+        <a class="btn head-btn" href="#customers">Customer details</a></div>
+      <div class="supply-body">${supplyKpis(st)}<div>${supplyChart(st, 'Monthly tonnes delivered')}</div></div>`;
   }
 
   // ---------- Customers ----------
@@ -690,6 +809,10 @@
       const ps = paths.filter((p) => p.customer === c.id);
       const connected = uniq(ps.flatMap((p) => p.assets)).map(assetById);
       const prods = c.products.map(productById).filter(Boolean);
+      const log = supplyStats(D().supplyLog.filter((r) => r.customer === c.id));
+      const monthly = log.trucks ? log.monthlyAvg : c.monthlyVolumeMt;
+      const dispatches = log.trucks ? log.trucks / log.months.length : c.dispatchesPerMonth;
+      const since = c.supplyingSince ?? (log.months[0] ? monthName(log.months[0], true) : null);
       return `<section class="card customer-card" id="cust-${esc(c.id)}">
         <div class="customer-head">
           <span class="c-marker static">${ICON.customer}</span>
@@ -697,9 +820,9 @@
           <button class="btn head-btn" data-trace="${esc(c.id)}" type="button">Trace supply routes</button>
         </div>
         <div class="kpis kpis-4">
-          <div class="kpi"><div class="kpi-label">Monthly supply</div><div class="kpi-value">${c.monthlyVolumeMt ? fmt(c.monthlyVolumeMt) + '<small>MT</small>' : '–'}</div></div>
-          <div class="kpi"><div class="kpi-label">Dispatches / month</div><div class="kpi-value">${c.dispatchesPerMonth ? fmt(c.dispatchesPerMonth) : '–'}</div></div>
-          <div class="kpi"><div class="kpi-label">Supplying since</div><div class="kpi-value">${esc(c.supplyingSince ?? '–')}</div></div>
+          <div class="kpi"><div class="kpi-label">${log.trucks ? 'Average monthly supply' : 'Monthly supply'}</div><div class="kpi-value">${monthly ? fmt(Math.round(monthly)) + '<small>MT</small>' : '–'}</div></div>
+          <div class="kpi"><div class="kpi-label">Trucks / month</div><div class="kpi-value">${dispatches ? fmt(Math.round(dispatches)) : '–'}</div></div>
+          <div class="kpi"><div class="kpi-label">Supplying since</div><div class="kpi-value ${since && String(since).length > 4 ? 'kv-sm' : ''}">${esc(since ?? '–')}</div></div>
           <div class="kpi"><div class="kpi-label">Supply routes</div><div class="kpi-value">${ps.length}</div></div>
         </div>
         <div class="customer-body">
@@ -708,21 +831,33 @@
             <ul class="prod-list">${prods.map((p) => `<li><span>${esc(p.name)}</span><span class="form-badge ${esc(p.form)}">${esc(formLabel(p.form))}</span></li>`).join('') || '<li class="muted">–</li>'}</ul>
             <div class="section-title" style="margin-top:16px">Connected network assets</div>
             <div class="chip-wrap">${connected.map(assetChip).join('') || '<span class="muted">–</span>'}</div>
-            ${ps.length ? `<div class="section-title" style="margin-top:16px">Supply routes (straight-line distance)</div>${ps.map((p) => `<div class="path-row">${chain(p)}<span class="muted">~${fmt(Math.round(pathDistance(p)))} km</span></div>`).join('')}` : ''}
+            ${ps.length ? `<div class="section-title" style="margin-top:16px">Supply routes</div>${ps.map((p) => `<div class="path-row">${chain(p)}<span class="muted">${distLabel(p)}</span></div>`).join('')}` : ''}
           </div>
-          <div><div class="section-title">Supply history (MT per month)</div>${historyChart(c)}</div>
+          <div>${log.trucks
+            ? `<div class="section-title">Deliveries recorded · ${esc(log.period)}</div>${supplyKpis(log)}${supplyChart(log, `Monthly tonnes delivered to ${c.name}`)}`
+            : `<div class="section-title">Supply history (MT per month)</div>${historyChart(c)}`}</div>
         </div>
       </section>`;
     }).join('');
   }
 
   // ---------- Sustainability & About ----------
+  const parsePoints = (text) => (text || '').split('\n').map((l) => l.trim()).filter(Boolean).map((line) => {
+    const [title, ...rest] = line.split('|');
+    return { title: title.trim(), body: rest.join('|').trim() };
+  });
+
   function renderSustainability() {
+    const c = D().content;
+    const eudr = parsePoints(c.eudr_points);
+    const eudrIcons = [ICON.leaf, ICON.check, ICON.pin, ICON.search];
+    $('#eudr').hidden = !c.eudr_intro && !eudr.length;
+    $('#eudr').innerHTML = `
+      <div class="eudr-head"><span class="eudr-badge">${ICON.leaf}<span>EUDR<small>compliant sourcing</small></span></span>
+        <div><h2>EU Deforestation Regulation (EUDR)</h2><p>${esc(c.eudr_intro)}</p></div></div>
+      <div class="eudr-grid">${eudr.map((it, i) => `<div class="eudr-item"><span class="sus-ico">${eudrIcons[i % eudrIcons.length]}</span><div><b>${esc(it.title)}</b><p>${esc(it.body)}</p></div></div>`).join('')}</div>`;
     const icons = [ICON.leaf, ICON.people, ICON.recycle, ICON.logistics, ICON.sourcing, ICON.check];
-    const items = (D().content.sustainability || '').split('\n').map((l) => l.trim()).filter(Boolean).map((line) => {
-      const [title, ...rest] = line.split('|');
-      return { title: title.trim(), body: rest.join('|').trim() };
-    });
+    const items = parsePoints(c.sustainability);
     $('#sus-grid').innerHTML = items.map((it, i) => `<div class="card sus-card"><span class="sus-ico">${icons[i % icons.length]}</span><h3>${esc(it.title)}</h3><p>${esc(it.body)}</p></div>`).join('') ||
       '<div class="card empty">No sustainability content yet.</div>';
   }
@@ -758,12 +893,65 @@
         <td><b>${esc(c.name)}</b><br><span class="muted small">${esc(c.industry)}</span></td>
         <td>${esc(c.place)}</td>
         <td>${c.products.length}</td>
-        <td>${c.monthlyVolumeMt ? `${fmt(c.monthlyVolumeMt)} MT` : '–'}</td>
+        <td>${(() => { const st = supplyStats(D().supplyLog.filter((r) => r.customer === c.id)); const v = st.trucks ? st.monthlyAvg : c.monthlyVolumeMt;
+          return v ? `${fmt(Math.round(v))} MT${st.trucks ? ' <span class="muted small">avg, imported</span>' : ''}` : '–'; })()}</td>
         <td>${c.history.length} months</td>
         <td><div class="actions"><button class="btn btn-sm" data-edit-customer="${esc(c.id)}" type="button">Edit</button>
           <button class="btn btn-sm btn-danger" data-delete-customer="${esc(c.id)}" type="button">Delete</button></div></td></tr>`).join('')}</tbody>`;
     renderContentForm();
     renderUsers();
+    renderRoutesAdmin();
+    renderImportCurrent();
+  }
+
+  function renderRoutesAdmin() {
+    const name = (l) => `${esc(assetById(l.from)?.name)} → ${esc(l.toAsset ? assetById(l.toAsset)?.name : customerById(l.toCustomer)?.name)}`;
+    $('#admin-routes').innerHTML = `<thead><tr><th>Supply link</th><th>Road distance</th><th>Drive time</th><th>Status</th></tr></thead>
+      <tbody>${D().links.map((l) => `<tr><td>${name(l)}</td><td>${l.roadKm != null ? `${fmt(Math.round(l.roadKm))} km` : '–'}</td>
+        <td>${l.roadMinutes != null ? hours(l.roadMinutes) : '–'}</td>
+        <td>${l.road ? (l.routeError ? `<span class="status Seasonal">Kept last route</span><br><span class="muted small">${esc(l.routeError)}</span>` : '<span class="status">Routed by road</span>')
+          : l.routeError ? `<span class="status Inactive">Failed</span><br><span class="muted small">${esc(l.routeError)}</span>` : '<span class="status Commissioning">Not calculated</span>'}</td></tr>`).join('')}</tbody>`;
+  }
+
+  async function refreshRoutes(force) {
+    $('#routes-error').textContent = 'Calculating road routes…';
+    try {
+      const r = await api('routes_refresh', { force });
+      $('#routes-error').textContent = r.failed ? `${r.failed} route(s) could not be calculated: ${r.errors.join('; ')}` : '';
+      await reload();
+    } catch (err) { $('#routes-error').textContent = err.message; }
+  }
+
+  function renderImportCurrent() {
+    const rows = D().supplyLog;
+    const byCustomer = uniq(rows.map((r) => r.customer));
+    $('#import-current').innerHTML = byCustomer.map((cid) => {
+      const st = supplyStats(rows.filter((r) => r.customer === cid));
+      const files = uniq(st.rows.map((r) => r.sourceFile).filter(Boolean));
+      return `<div class="import-current"><div><b>${esc(customerById(cid)?.name || cid)}</b>: ${fmt(st.trucks)} trucks, ${fmt(Math.round(st.delivered))} MT delivered, ${esc(st.period)}
+        <br><span class="muted small">${esc(uniq(st.rows.map((r) => r.label)).join(', '))}${files.length ? ` · from ${esc(files.join(', '))}` : ''}</span></div>
+        <button class="btn btn-sm btn-danger" data-import-clear="${esc(cid)}" type="button">Remove</button></div>`;
+    }).join('') || '<p class="muted">No supply data imported yet.</p>';
+  }
+
+  function renderImportPreview(res) {
+    const productOptions = (sel) => '<option value="">(no product)</option>' + D().materials.map((m) => `<optgroup label="${esc(m.name)}">${D().products.filter((p) => p.material === m.id)
+      .map((p) => `<option value="${p.id}" ${p.id === sel ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</optgroup>`).join('');
+    $('#import-preview').innerHTML = `<div class="table-wrap"><table class="table">
+      <thead><tr><th>Import</th><th>Sheet</th><th>Show as</th><th>Product</th><th>Trucks</th><th>Delivered (MT)</th><th>Months</th><th>Notes</th></tr></thead>
+      <tbody>${res.sheets.map((sh, i) => `<tr data-sheet="${i}">
+        <td><input type="checkbox" name="include" ${sh.include ? 'checked' : ''}></td>
+        <td><b>${esc(sh.name)}</b></td>
+        <td><input name="label" value="${esc(sh.label)}"></td>
+        <td><select name="product">${productOptions(sh.productId)}</select></td>
+        <td>${fmt(sh.trips)}</td><td>${fmt(Math.round(sh.deliveredMt))}</td>
+        <td>${esc(monthName(sh.from))} – ${esc(monthName(sh.to))} ${esc(sh.to.slice(0, 4))}</td>
+        <td class="small muted">${[sh.duplicates ? `${sh.duplicates} duplicate entries skipped` : '', sh.undated ? `${sh.undated} rows without a valid date skipped` : '',
+          sh.include ? '' : 'Looks like a summary of the other sheets: left unticked to avoid double counting'].filter(Boolean).join('<br>')}</td></tr>`).join('')}</tbody></table></div>
+      <div class="inline-form"><label class="inline-label">Delivered to<select name="customer">${D().customers.map((c) => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('')}</select></label>
+        <button class="btn btn-primary" data-import-commit type="button">Import ticked sheets</button>
+        <span class="muted small">Replaces any supply data already imported for this customer.</span></div>`;
+    state.importSheets = res.sheets;
   }
 
   function renderContentForm() {
@@ -775,6 +963,8 @@
       ${field('hero_subtitle', 'Dashboard sub-headline', 2)}
       ${field('company_statement', 'Company statement (shown under the headline)', 2)}
       ${field('about', 'About us', 6, 'Leave a blank line between paragraphs')}
+      ${field('eudr_intro', 'EUDR statement (top of the Sustainability page)', 3, 'Leave empty to hide the EUDR section and badge.')}
+      ${field('eudr_points', 'EUDR points', 4, 'One per line: Title | Description. EU customers may ask for evidence of each claim.')}
       ${field('sustainability', 'Sustainability points', 5, 'One per line: Title | Description. Only include claims you can back up.')}
       ${field('contact_email', 'Contact email')}${field('contact_phone', 'Contact phone')}
       ${field('contact_address', 'Contact address', 2)}
@@ -927,7 +1117,7 @@
 
   function renderAll() {
     document.title = `${D().content.company_name} · Supply Network`;
-    renderLegends(); renderDashboard(); renderFlow(); renderNetFilters(); renderSidePanel(); renderAssetGroups();
+    renderLegends(); renderDashboard(); renderSupplyRecord(); renderFlow(); renderNetFilters(); renderSidePanel(); renderAssetGroups();
     renderMaterials(); renderProcessing(); renderLogisticsControls(); renderLogistics(); renderCustomers();
     renderSustainability(); renderAbout(); renderAdmin();
   }
@@ -943,7 +1133,7 @@
     window.addEventListener('hashchange', showPage);
 
     document.addEventListener('click', async (e) => {
-      const t = e.target.closest('[data-filter],[data-select],[data-back],[data-material-map],[data-type-jump],[data-trace],[data-customer-link],[data-add-asset],[data-edit-asset],[data-delete-asset],[data-save-asset],[data-add-customer],[data-edit-customer],[data-delete-customer],[data-save-customer],[data-add-row],[data-remove-row],[data-user-delete],[data-reset]');
+      const t = e.target.closest('[data-routes-refresh],[data-import-commit],[data-import-clear],[data-filter],[data-select],[data-back],[data-material-map],[data-type-jump],[data-trace],[data-customer-link],[data-add-asset],[data-edit-asset],[data-delete-asset],[data-save-asset],[data-add-customer],[data-edit-customer],[data-delete-customer],[data-save-customer],[data-add-row],[data-remove-row],[data-user-delete],[data-reset]');
       if (!t) return;
       const ds = t.dataset;
       if (ds.filter) { state.net[ds.filter] = ds.value || null; if (ds.filter === 'type' && ds.value === 'customer') state.net.selected = null; refreshNetwork(true); }
@@ -968,6 +1158,22 @@
         const c = customerById(ds.deleteCustomer);
         if (confirm(`Delete customer ${c.name}? Routes to it are removed too. This cannot be undone.`)) {
           try { await api('customer_delete', { id: c.id }); if (state.log.customer === c.id) state.log.customer = ''; await reload(); } catch (err) { alert(err.message); }
+        }
+      } else if (ds.routesRefresh !== undefined) refreshRoutes(ds.routesRefresh === 'force');
+      else if (ds.importCommit !== undefined) {
+        const rows = $$('#import-preview tr[data-sheet]').filter((tr) => $('[name="include"]', tr).checked);
+        try {
+          const r = await api('import_commit', {
+            customerId: $('#import-preview [name="customer"]').value,
+            sheets: rows.map((tr) => ({ name: state.importSheets[Number(tr.dataset.sheet)].name, label: $('[name="label"]', tr).value, productId: $('[name="product"]', tr).value })),
+          });
+          await reload();
+          $('#import-preview').innerHTML = `<div class="banner small">Imported ${fmt(r.trucks)} trucks and ${fmt(Math.round(r.deliveredMt))} MT across ${r.months} months.</div>`;
+          $('#import-error').textContent = '';
+        } catch (err) { $('#import-error').textContent = err.message; }
+      } else if (ds.importClear) {
+        if (confirm(`Remove the imported supply data for ${customerById(ds.importClear)?.name}?`)) {
+          try { await api('import_clear', { customerId: ds.importClear }); await reload(); } catch (err) { alert(err.message); }
         }
       } else if (ds.addRow !== undefined) $('#hist-rows').insertAdjacentHTML('beforeend', historyRow());
       else if (ds.removeRow !== undefined) t.closest('.hist-row').remove();
@@ -1018,6 +1224,18 @@
           location.hash = 'admin';
         } catch (err) { $('#content-error').textContent = err.message; }
       });
+      const importForm = $('#import-form');
+      importForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        $('#import-error').textContent = 'Reading workbook…';
+        try {
+          const res = await fetch('api.php?action=import_preview', { method: 'POST', headers: { 'X-CSRF-Token': CSRF }, body: new FormData(importForm), credentials: 'same-origin' });
+          const json = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(json.error || 'Upload failed');
+          $('#import-error').textContent = '';
+          renderImportPreview(json);
+        } catch (err) { $('#import-error').textContent = err.message; $('#import-preview').innerHTML = ''; }
+      });
       const userForm = $('#user-form');
       userForm.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -1039,6 +1257,10 @@
     }
     renderAll();
     showPage();
+    // First visit after an update: admins calculate the missing road routes once, in the background.
+    if (isAdmin() && D().app.routing && D().links.some((l) => !l.road && !l.routeError)) {
+      api('routes_refresh', {}).then(() => reload()).catch(() => {});
+    }
   }
 
   start();

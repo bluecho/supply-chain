@@ -31,6 +31,7 @@ function load_network(): void
         && (int) db()->query('SELECT COUNT(*) FROM materials')->fetchColumn() === 0) {
         run_sql_file(APP_ROOT . '/database/seed.sql');
     }
+    run_migrations();
 }
 
 /** The upgrade needs an admin: either the signed-in session or admin credentials typed on this page. */

@@ -97,3 +97,6 @@ function send_security_headers(): void
 
 require __DIR__ . '/auth.php';
 require __DIR__ . '/supply.php';
+require __DIR__ . '/migrate.php';
+require __DIR__ . '/routing.php';
+require __DIR__ . '/import.php';

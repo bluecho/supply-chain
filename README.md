@@ -104,6 +104,41 @@ Use the picker at the top right of the map to switch between them. If a provider
 
 For a commercial provider with an API key, such as MapTiler, Mapbox or Stadia, add a `map_tiles` entry to `app/config.php`. See `app/config.sample.php`. Your provider then becomes the default base map.
 
+## Supply data (dispatch log book)
+
+**Admin → Supply data** imports the dispatch log book (.xlsx):
+
+1. Choose the workbook and click **Read workbook**. Every sheet with a "Truck Number" column is listed with its trucks, tonnes delivered and months.
+2. Sheets named like "Log Book" or "Assessment" repeat trips from the main sheets. They are left unticked so nothing is counted twice.
+3. Duplicate weighbridge (WC) tickets are counted once.
+4. Pick the product and the display name for each sheet, choose the customer, and click **Import ticked sheets**.
+
+Importing again replaces that customer's earlier import, so upload the updated log book whenever you like.
+
+Only monthly totals are stored:
+
+- Trucks
+- Tonnes delivered at the mill
+- Tonnes dispatched
+- Transit weight loss
+- Days from dispatch to the mill
+
+Truck numbers, driver and transporter details, rates, invoices, GST and margins are read only to count trips and are never saved. Customers (viewers) see tonnes delivered, trucks, average load and transit time. Transit weight loss is shown to admins only.
+
+## Road routes
+
+Each supply link is routed along roads once, using the free OSRM routing service, and stored with its road distance and drive time. The map lines, the moving trucks and the route distances then follow the road. Routes are recalculated automatically when an asset or customer moves. You can also use **Admin → Road routes**.
+
+- Customers never see the exact yard: the road line stops about 1.5 km from each asset and starts at the rounded position.
+- Admins get an "Open truck route in Google Maps" link on each route in Logistics.
+- To use a different OSRM-compatible server, set `routing.url` in `app/config.php`. Set `routing.enabled` to `false` to switch road routing off.
+
+The server needs outgoing HTTPS access (curl or `allow_url_fopen`), which most hosts allow.
+
+## Database updates
+
+New versions update the database automatically on the first page load after the files are uploaded. You don't need to run install.php again.
+
 ## Starting data
 
 `database/seed.sql` loads the 5 locations as a **first draft**:

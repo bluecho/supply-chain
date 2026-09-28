@@ -681,3 +681,9 @@ details.more[open] summary { margin-bottom: 10px; }
   .tab-bar { overflow-x: auto; flex-wrap: nowrap; }
   .tab-bar button { flex: 0 0 auto; }
 }
+
+/* Company logo */
+.brand-logo { width: 44px; height: 44px; border-radius: 50%; object-fit: contain; flex: 0 0 auto; background: #fff; }
+.brand-lg .brand-logo { width: 84px; height: 84px; box-shadow: 0 0 0 4px rgba(255, 255, 255, .25); }
+.login-hero .brand { flex-direction: column; align-items: flex-start; gap: 14px; }
+@media (max-width: 760px) { .brand-logo { width: 34px; height: 34px; } }

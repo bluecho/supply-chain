@@ -36,13 +36,15 @@ $heroSub = ($content['hero_subtitle'] ?? '') ?: 'Reliable sourcing, processing a
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Sign in · <?= e($appName) ?></title>
+  <link rel="icon" type="image/png" href="<?= asset_url('assets/favicon.png') ?>">
+  <link rel="apple-touch-icon" href="<?= asset_url('assets/apple-touch-icon.png') ?>">
   <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="<?= asset_url('assets/styles.css') ?>">
 </head>
 <body>
   <section class="login">
     <div class="login-hero">
-      <div class="brand brand-lg"><span class="brand-mark"></span><span><?= e($appName) ?></span></div>
+      <div class="brand brand-lg"><img class="brand-logo" src="<?= asset_url('assets/logo.png') ?>" alt="<?= e($appName) ?> logo"><span><?= e($appName) ?></span></div>
       <h1><?= e($heroTitle) ?></h1>
       <p><?= e($heroSub) ?></p>
       <ul class="login-points">

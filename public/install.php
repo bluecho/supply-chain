@@ -99,6 +99,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $mode !== 'done') {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Install · Supply Network</title>
+  <link rel="icon" type="image/png" href="<?= asset_url('assets/favicon.png') ?>">
+  <link rel="apple-touch-icon" href="<?= asset_url('assets/apple-touch-icon.png') ?>">
   <link rel="stylesheet" href="<?= asset_url('assets/styles.css') ?>">
 </head>
 <body>

@@ -47,13 +47,15 @@ if ($admin) {
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="csrf-token" content="<?= e(csrf_token()) ?>">
   <title><?= e($company) ?> · Supply Network</title>
+  <link rel="icon" type="image/png" href="<?= asset_url('assets/favicon.png') ?>">
+  <link rel="apple-touch-icon" href="<?= asset_url('assets/apple-touch-icon.png') ?>">
   <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="assets/vendor/leaflet/leaflet.css">
   <link rel="stylesheet" href="<?= asset_url('assets/styles.css') ?>">
 </head>
 <body class="<?= $admin ? 'is-admin' : 'is-viewer' ?>">
   <header class="topbar">
-    <a class="brand" href="#dashboard"><span class="brand-mark"></span><span><?= e($company) ?></span></a>
+    <a class="brand" href="#dashboard"><img class="brand-logo" src="<?= asset_url('assets/logo.png') ?>" alt="<?= e($company) ?> logo"><span><?= e($company) ?></span></a>
     <div class="user-box">
       <span class="role-badge <?= $admin ? 'admin' : '' ?>"><?= $admin ? 'Admin' : 'Customer view' ?></span>
       <span class="user-name"><?= e($user['display_name']) ?></span>

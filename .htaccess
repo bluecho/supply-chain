@@ -1,0 +1,5 @@
+# For hosts where the document root can't point at public/: route everything there.
+RewriteEngine On
+RewriteRule ^(app|database)(/|$) - [F,L]
+RewriteCond %{REQUEST_URI} !^/public/
+RewriteRule ^(.*)$ public/$1 [L]

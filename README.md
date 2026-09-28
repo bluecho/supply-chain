@@ -26,7 +26,7 @@ Supply routes connect these assets to the customer mills (ITC PSPD, TNPL).
 
 ## Pages
 
-The navigation has six sections. Sections with several pages show a small sub-navigation.
+The navigation has six sections. Sections with several views (Network, Products) show large tab cards at the top, each with an icon and a one-line description, plus Back / Next buttons at the bottom of each view.
 
 | Section | Pages |
 |---|---|

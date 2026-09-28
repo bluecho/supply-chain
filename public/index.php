@@ -22,15 +22,22 @@ if (!schema_ready()) {
 $company = site_content()['company_name'] ?: (config()['app_name'] ?? 'Supply Network');
 // Top-level sections; sections with several pages get a small sub-navigation.
 $groups = [
-    'dashboard'      => ['Overview', ['dashboard' => 'Overview']],
-    'network'        => ['Network', ['network' => 'Map', 'assets' => 'Assets', 'logistics' => 'Routes']],
-    'materials'      => ['Products', ['materials' => 'Materials', 'processing' => 'Processing']],
-    'customers'      => ['Customers', ['customers' => 'Customers']],
-    'sustainability' => ['Sustainability', ['sustainability' => 'Sustainability']],
-    'about'          => ['About', ['about' => 'About us']],
+    'dashboard'      => ['Overview', ['dashboard' => ['Overview', '', '']]],
+    'network'        => ['Network', [
+        'network'   => ['Map', 'All our sites on one map', 'map'],
+        'assets'    => ['Assets', 'A profile for every site', 'chipping'],
+        'logistics' => ['Routes', 'Trace a truck route to the mill', 'logistics'],
+    ]],
+    'materials'      => ['Products', [
+        'materials'  => ['Materials', 'Wood species and product forms', 'sourcing'],
+        'processing' => ['Processing', 'How wood becomes chips', 'processing'],
+    ]],
+    'customers'      => ['Customers', ['customers' => ['Customers', '', '']]],
+    'sustainability' => ['Sustainability', ['sustainability' => ['Sustainability', '', '']]],
+    'about'          => ['About', ['about' => ['About us', '', '']]],
 ];
 if ($admin) {
-    $groups['admin'] = ['Admin', ['admin' => 'Admin']];
+    $groups['admin'] = ['Admin', ['admin' => ['Admin', '', '']]];
 }
 ?>
 <!doctype html>
@@ -64,8 +71,14 @@ if ($admin) {
 
   <main>
     <?php foreach ($groups as $id => [$label, $pages]): if (count($pages) > 1): ?>
-      <nav class="subnav" data-subnav="<?= $id ?>" hidden>
-        <?php foreach ($pages as $page => $pageLabel): ?><a href="#<?= $page ?>" data-page-link="<?= $page ?>"><?= e($pageLabel) ?></a><?php endforeach; ?>
+      <nav class="section-tabs" data-subnav="<?= $id ?>" aria-label="<?= e($label) ?> views" hidden>
+        <?php $n = 0; foreach ($pages as $page => [$pageLabel, $desc, $icon]): $n++; ?>
+          <a class="stab" href="#<?= $page ?>" data-page-link="<?= $page ?>">
+            <span class="stab-ico" data-icon="<?= $icon ?>"></span>
+            <span class="stab-text"><b><?= e($pageLabel) ?></b><small><?= e($desc) ?></small></span>
+            <span class="stab-step"><?= $n ?>/<?= count($pages) ?></span>
+          </a>
+        <?php endforeach; ?>
       </nav>
     <?php endif; endforeach; ?>
     <!-- Dashboard -->
@@ -179,7 +192,14 @@ if ($admin) {
     <?php if ($admin): ?>
     <div class="page" data-page="admin">
       <div class="page-head"><h2>Admin</h2></div>
-      <div class="segmented" id="admin-tabs"><button type="button" data-admin-tab="assets">Assets</button><button type="button" data-admin-tab="customers">Customers</button><button type="button" data-admin-tab="supply">Supply data</button><button type="button" data-admin-tab="routes">Road routes</button><button type="button" data-admin-tab="content">Site content</button><button type="button" data-admin-tab="users">Users</button></div>
+      <div class="tab-bar" id="admin-tabs" role="tablist">
+        <button type="button" data-admin-tab="assets"><span data-icon="chipping"></span>Assets</button>
+        <button type="button" data-admin-tab="customers"><span data-icon="customer"></span>Customers</button>
+        <button type="button" data-admin-tab="supply"><span data-icon="scale"></span>Supply data</button>
+        <button type="button" data-admin-tab="routes"><span data-icon="route"></span>Road routes</button>
+        <button type="button" data-admin-tab="content"><span data-icon="log"></span>Site content</button>
+        <button type="button" data-admin-tab="users"><span data-icon="people"></span>Users</button>
+      </div>
       <div class="card" data-admin-section="assets">
         <div class="card-head"><h3>Assets</h3><span class="muted">Locations, capabilities, products handled and outgoing routes</span>
           <button class="btn btn-primary head-btn" data-add-asset type="button">+ Add asset</button></div>
@@ -230,6 +250,7 @@ if ($admin) {
     <dialog id="asset-dialog"><form id="asset-form" method="dialog" class="dlg-form"></form></dialog>
     <dialog id="customer-dialog"><form id="customer-form" method="dialog" class="dlg-form"></form></dialog>
     <?php endif; ?>
+    <nav class="pager" id="pager" hidden></nav>
   </main>
 
   <script src="assets/vendor/leaflet/leaflet.js"></script>

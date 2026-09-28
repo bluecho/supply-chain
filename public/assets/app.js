@@ -1099,11 +1099,15 @@
     if (!pages.includes(page)) page = 'dashboard';
     $$('.page').forEach((p) => { p.hidden = p.dataset.page !== page; });
     const tab = page === 'asset' ? 'assets' : page;
-    const sub = $(`.subnav [data-page-link="${tab}"]`)?.closest('.subnav');
+    const sub = $(`.section-tabs [data-page-link="${tab}"]`)?.closest('.section-tabs');
     const group = sub ? sub.dataset.subnav : tab;
     $$('#tabs a').forEach((a) => a.classList.toggle('active', a.dataset.group === group));
-    $$('.subnav').forEach((n) => { n.hidden = n !== sub; });
-    $$('.subnav a').forEach((a) => a.classList.toggle('active', a.dataset.pageLink === tab));
+    $$('.section-tabs').forEach((n) => { n.hidden = n !== sub; });
+    $$('.section-tabs a').forEach((a) => {
+      a.classList.toggle('active', a.dataset.pageLink === tab);
+      a.setAttribute('aria-current', a.dataset.pageLink === tab ? 'page' : 'false');
+    });
+    renderPager(sub, tab);
     window.scrollTo({ top: 0 });
     // Leaflet needs a visible container, so maps are drawn when their page is shown.
     if (page === 'dashboard') { drawDashMap(); maps['dash-map'].map.invalidateSize(); }
@@ -1112,6 +1116,19 @@
     if (page === 'asset') renderAssetProfile(Number(location.hash.split('/')[1]));
     if (page === 'admin') { showAdminTab(state.adminTab || 'assets'); loadUsers().catch((e) => { $('#user-error').textContent = e.message; }); }
     $('#tabs .active')?.scrollIntoView({ block: 'nearest', inline: 'center' });
+  }
+
+  /** "Back / Next" links at the bottom of pages that belong to a multi-view section. */
+  function renderPager(sub, tab) {
+    const pager = $('#pager');
+    const links = sub ? $$('a', sub) : [];
+    const i = links.findIndex((a) => a.dataset.pageLink === tab);
+    if (i < 0) { pager.hidden = true; return; }
+    const label = (a) => $('b', a).textContent;
+    const prev = links[i - 1], next = links[i + 1];
+    pager.hidden = false;
+    pager.innerHTML = `${prev ? `<a class="pager-link" href="${prev.getAttribute('href')}">← ${esc(label(prev))}</a>` : '<span></span>'}
+      ${next ? `<a class="pager-link next" href="${next.getAttribute('href')}"><small>Next</small>${esc(label(next))} →</a>` : ''}`;
   }
 
   function renderAll() {
@@ -1253,6 +1270,7 @@
   }
 
   async function start() {
+    $$('[data-icon]').forEach((el) => { el.innerHTML = ICON[el.dataset.icon] || ''; });
     bindEvents();
     try {
       state.data = await api('data');

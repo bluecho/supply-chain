@@ -84,7 +84,8 @@ function send_security_headers(): void
 {
     header('X-Content-Type-Options: nosniff');
     header('X-Frame-Options: SAMEORIGIN');
-    header('Referrer-Policy: same-origin');
+    // Map tile servers (OpenStreetMap in particular) reject requests without a Referer.
+    header('Referrer-Policy: strict-origin-when-cross-origin');
 }
 
 require __DIR__ . '/auth.php';

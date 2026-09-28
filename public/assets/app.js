@@ -100,11 +100,54 @@
   }
 
   // ---------- Map ----------
+  // Base maps that need no API key. If the active one fails to load (blocked,
+  // rate-limited or down), the map switches to the next one automatically.
+  const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services';
+  const ESRI_ATTR = 'Tiles &copy; Esri &mdash; Esri, HERE, Garmin, &copy; OpenStreetMap contributors';
+  function baseLayers() {
+    const layers = {};
+    const custom = state.data.app.mapTiles;
+    if (custom && custom.url) {
+      layers[custom.name || 'Custom'] = L.tileLayer(custom.url, { attribution: custom.attribution || '', maxZoom: custom.maxZoom || 19 });
+    }
+    layers.Light = L.layerGroup([
+      L.tileLayer(`${ESRI}/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}`, { attribution: ESRI_ATTR, maxZoom: 16 }),
+      L.tileLayer(`${ESRI}/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}`, { maxZoom: 16 }),
+    ]);
+    layers.Streets = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors', maxZoom: 19,
+    });
+    layers.Satellite = L.tileLayer(`${ESRI}/World_Imagery/MapServer/tile/{z}/{y}/{x}`, {
+      attribution: 'Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics', maxZoom: 18,
+    });
+    return layers;
+  }
+
   function initMap() {
     map = L.map('map', { zoomControl: true, scrollWheelZoom: true }).setView([22.5, 79], 5);
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-      attribution: '&copy; OpenStreetMap contributors &copy; CARTO', subdomains: 'abcd', maxZoom: 19,
-    }).addTo(map);
+    const layers = baseLayers();
+    const names = Object.keys(layers);
+    L.control.layers(layers, null, { position: 'topright' }).addTo(map);
+
+    let current = 0;
+    const use = (i) => {
+      names.forEach((n) => map.removeLayer(layers[n]));
+      current = i;
+      layers[names[i]].addTo(map);
+    };
+    // Watch every tile layer: several errors before any tile loads means the provider is unusable here.
+    names.forEach((name, i) => {
+      const tiles = layers[name] instanceof L.TileLayer ? [layers[name]] : layers[name].getLayers();
+      let errors = 0, loaded = false;
+      tiles.forEach((t) => {
+        t.on('tileload', () => { loaded = true; });
+        t.on('tileerror', () => {
+          errors += 1;
+          if (!loaded && errors >= 4 && current === i && i + 1 < names.length) use(i + 1);
+        });
+      });
+    });
+    use(0);
     routeLayer = L.layerGroup().addTo(map);
     customerLayer = L.layerGroup().addTo(map);
     vendorLayer = L.layerGroup().addTo(map);
@@ -494,7 +537,6 @@
   }
 
   async function start() {
-    initMap();
     bindEvents();
     try {
       state.data = await api('network');
@@ -502,6 +544,7 @@
       $('#side-panel').innerHTML = `<p class="error" style="padding:18px">${esc(err.message)}</p>`;
       return;
     }
+    initMap();
     showTab(location.hash.slice(1) || 'overview');
     renderAll(true);
   }

@@ -49,6 +49,17 @@ php -S localhost:8080 -t public
   - Add a vendor by pasting a Google Maps link. The coordinates fill in automatically.
   - Create viewer accounts for prospective customers, reset passwords and remove users.
 
+## Map backgrounds
+
+The map uses free base maps that need no API key:
+- **Light**: Esri Light Gray. This is the default.
+- **Streets**: OpenStreetMap.
+- **Satellite**: Esri World Imagery.
+
+Use the picker at the top right of the map to switch between them. If a provider fails to load, the map moves to the next one automatically.
+
+For a commercial provider with an API key, such as MapTiler, Mapbox or Stadia, add a `map_tiles` entry to `app/config.php`. See `app/config.sample.php`. Your provider then becomes the default base map.
+
 ## Starting data
 
 `database/seed.sql` holds the 5 locations that were provided:

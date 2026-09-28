@@ -75,7 +75,7 @@ function network_for(array $user): array
     }
 
     return [
-        'app'       => ['name' => config()['app_name'] ?? 'Supply Network', 'salesContact' => config()['sales_contact'] ?? ''],
+        'app'       => ['name' => config()['app_name'] ?? 'Supply Network', 'salesContact' => config()['sales_contact'] ?? '', 'mapTiles' => config()['map_tiles'] ?? null],
         'user'      => ['username' => $user['username'], 'displayName' => $user['display_name'], 'role' => $user['role']],
         'materials' => $materials,
         'customers' => $customers,

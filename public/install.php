@@ -33,6 +33,26 @@ function load_network(): void
     }
 }
 
+/** The upgrade needs an admin: either the signed-in session or admin credentials typed on this page. */
+function upgrade_authorised(): bool
+{
+    if (is_admin()) {
+        return true;
+    }
+    $ip = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+    if (login_blocked($ip)) {
+        return false;
+    }
+    $stmt = db()->prepare("SELECT password_hash FROM users WHERE username = ? AND role = 'admin'");
+    $stmt->execute([trim((string) ($_POST['username'] ?? ''))]);
+    $hash = $stmt->fetchColumn();
+    if ($hash && password_verify((string) ($_POST['password'] ?? ''), $hash)) {
+        return true;
+    }
+    db()->prepare('INSERT INTO login_attempts (ip) VALUES (?)')->execute([$ip]);
+    return false;
+}
+
 $hasUsers = table_exists('users') && (int) db()->query('SELECT COUNT(*) FROM users')->fetchColumn() > 0;
 $mode = !$hasUsers ? 'install' : (table_exists('assets') ? 'done' : 'upgrade');
 $error = null;
@@ -55,7 +75,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $mode !== 'done') {
                 $error = 'Database error: ' . $e->getMessage();
             }
         }
-    } elseif ($mode === 'upgrade' && is_admin()) {
+    } elseif ($mode === 'upgrade' && !upgrade_authorised()) {
+        $error = 'Enter the username and password of an admin account.';
+    } elseif ($mode === 'upgrade') {
         try {
             db()->exec('SET FOREIGN_KEY_CHECKS = 0');
             foreach (['vendor_customers', 'vendor_materials', 'vendor_contacts', 'vendors', 'material_products', 'customers', 'materials'] as $old) {
@@ -92,17 +114,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $mode !== 'done') {
         <a class="btn btn-primary btn-block" href="login.php" style="text-align:center;text-decoration:none">Go to sign in</a>
       <?php elseif ($mode === 'upgrade'): ?>
         <h2>Upgrade to the asset-based network</h2>
-        <?php if (!is_admin()): ?>
-          <p>An earlier version is installed. <a href="login.php">Sign in as an admin</a>, then open this page again to upgrade.</p>
-        <?php else: ?>
-          <form method="post" style="display:grid;gap:14px">
-            <p>This replaces the old vendor tables with the new supply network: assets, supply routes, customers and site content. It loads the 5 locations as your own assets.</p>
-            <p class="muted">User accounts are kept. Vendor details entered in the old version are removed, so note down anything you still need first.</p>
-            <input type="hidden" name="csrf" value="<?= e(csrf_token()) ?>">
-            <p class="error" role="alert"><?= e($error) ?></p>
-            <button class="btn btn-primary btn-block" type="submit">Upgrade now</button>
-          </form>
-        <?php endif; ?>
+        <form method="post" style="display:grid;gap:14px">
+          <p>This replaces the old vendor tables with the new supply network: assets, supply routes, customers and site content. It loads the 5 locations as your own assets.</p>
+          <p class="muted">User accounts are kept. Vendor details entered in the old version are removed, so note down anything you still need first.</p>
+          <input type="hidden" name="csrf" value="<?= e(csrf_token()) ?>">
+          <?php if (!is_admin()): ?>
+            <label>Admin username<input name="username" autocomplete="username" required></label>
+            <label>Admin password<input name="password" type="password" autocomplete="current-password" required></label>
+          <?php endif; ?>
+          <p class="error" role="alert"><?= e($error) ?></p>
+          <button class="btn btn-primary btn-block" type="submit">Upgrade now</button>
+        </form>
       <?php else: ?>
         <h2>Install Supply Network</h2>
         <form method="post" style="display:grid;gap:14px">

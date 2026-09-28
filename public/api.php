@@ -19,6 +19,10 @@ if ($user === null) {
     respond(['error' => 'Please sign in.'], 401);
 }
 
+if (!schema_ready()) {
+    respond(['error' => 'The site is being updated. Please try again in a few minutes.'], 503);
+}
+
 $action = $_GET['action'] ?? '';
 $method = $_SERVER['REQUEST_METHOD'];
 $body = [];

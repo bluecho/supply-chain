@@ -43,6 +43,17 @@ const PRIVATE_FIELDS = [
 const CONTENT_KEYS = ['company_name', 'hero_title', 'hero_subtitle', 'company_statement', 'about', 'sustainability',
     'contact_email', 'contact_phone', 'contact_address'];
 
+/** False until install.php has created (or upgraded to) the asset-based tables. */
+function schema_ready(): bool
+{
+    static $ready = null;
+    if ($ready === null) {
+        $stmt = db()->query("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name IN ('assets', 'site_content')");
+        $ready = (int) $stmt->fetchColumn() === 2;
+    }
+    return $ready;
+}
+
 function site_content(): array
 {
     $rows = db()->query('SELECT content_key, body FROM site_content')->fetchAll(PDO::FETCH_KEY_PAIR);

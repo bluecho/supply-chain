@@ -26,17 +26,17 @@ Supply routes connect these assets to the customer mills (ITC PSPD, TNPL).
 
 ## Pages
 
-| Page | What it shows |
+The navigation has six sections. Sections with several pages show a small sub-navigation.
+
+| Section | Pages |
 |---|---|
-| Dashboard | Headline, company structure diagram, KPIs, network map, "from wood to industrial biomass" flow |
-| Supply Network | Full map with filters by asset type, material (Poplar, Eucalyptus, Shubabul, Casuarina) and product type (Debarked, With Bark, Core Chips) |
-| Assets | Assets grouped by type. Each has a profile: materials handled, capabilities, capacity, and supply connectivity from source to this asset to customer |
-| Materials | The four material groups, their products, where each is handled and which customers receive it |
-| Processing | Processing capabilities and the assets that provide them |
-| Logistics | Pick a product and a customer to trace every route to the mill, with animated trucks |
-| Customers | Each mill's materials supplied, connected assets, routes, volumes and monthly supply history chart |
-| Sustainability, About Us | Editable text from Admin → Site content |
-| Admin | Manage assets and their routes, customers and history, site text, and user accounts |
+| Overview | Headline, four key numbers, the network map and the supply record chart |
+| Network | **Map** with filters (asset type, material, product type, search). **Assets**, each with a profile page. **Routes**: trace a product to a customer along the road |
+| Products | **Materials**: the four species and their products. **Processing**: capabilities and processing sites |
+| Customers | Each mill's delivery figures and monthly chart. Routes and connected assets fold away under "Show more" |
+| Sustainability | The EUDR section, then sustainability points |
+| About | Company text, contact details and the organisation diagram |
+| Admin | Sub-tabs: Assets, Customers, Supply data, Road routes, Site content, Users |
 
 ## Two kinds of accounts
 

@@ -20,19 +20,17 @@ if (!schema_ready()) {
         . '<h2>We are updating the site</h2><p class="muted">Please check back in a few minutes.</p></div></section>');
 }
 $company = site_content()['company_name'] ?: (config()['app_name'] ?? 'Supply Network');
-$tabs = [
-    'dashboard'      => 'Dashboard',
-    'network'        => 'Supply Network',
-    'assets'         => 'Assets',
-    'materials'      => 'Materials',
-    'processing'     => 'Processing',
-    'logistics'      => 'Logistics',
-    'customers'      => 'Customers',
-    'sustainability' => 'Sustainability',
-    'about'          => 'About Us',
+// Top-level sections; sections with several pages get a small sub-navigation.
+$groups = [
+    'dashboard'      => ['Overview', ['dashboard' => 'Overview']],
+    'network'        => ['Network', ['network' => 'Map', 'assets' => 'Assets', 'logistics' => 'Routes']],
+    'materials'      => ['Products', ['materials' => 'Materials', 'processing' => 'Processing']],
+    'customers'      => ['Customers', ['customers' => 'Customers']],
+    'sustainability' => ['Sustainability', ['sustainability' => 'Sustainability']],
+    'about'          => ['About', ['about' => 'About us']],
 ];
 if ($admin) {
-    $tabs['admin'] = 'Admin';
+    $groups['admin'] = ['Admin', ['admin' => 'Admin']];
 }
 ?>
 <!doctype html>
@@ -58,13 +56,18 @@ if ($admin) {
       </form>
     </div>
     <nav class="tabs" id="tabs">
-      <?php foreach ($tabs as $id => $label): ?>
-        <a href="#<?= $id ?>" data-tab="<?= $id ?>"><?= e($label) ?></a>
+      <?php foreach ($groups as $id => [$label, $pages]): ?>
+        <a href="#<?= $id ?>" data-group="<?= $id ?>"><?= e($label) ?></a>
       <?php endforeach; ?>
     </nav>
   </header>
 
   <main>
+    <?php foreach ($groups as $id => [$label, $pages]): if (count($pages) > 1): ?>
+      <nav class="subnav" data-subnav="<?= $id ?>" hidden>
+        <?php foreach ($pages as $page => $pageLabel): ?><a href="#<?= $page ?>" data-page-link="<?= $page ?>"><?= e($pageLabel) ?></a><?php endforeach; ?>
+      </nav>
+    <?php endif; endforeach; ?>
     <!-- Dashboard -->
     <div class="page" data-page="dashboard">
       <section class="hero card">
@@ -79,35 +82,24 @@ if ($admin) {
             <a class="btn" href="#logistics">Trace a supply route</a>
           </div>
         </div>
-        <div class="hero-org" id="hero-org"></div>
       </section>
-      <div class="kpis" id="kpis"></div>
+      <div class="stats-row" id="kpis"></div>
+      <div class="card map-card">
+        <div class="card-head"><h3>Where we operate</h3><span class="muted">Our own assets and the mills we supply</span><a class="head-link" href="#network">Open full map →</a></div>
+        <div id="dash-map" class="map map-sm"></div>
+        <div class="legend" data-legend></div>
+      </div>
       <section class="card" id="supply-record" hidden></section>
-      <div class="map-grid">
-        <div class="card map-card">
-          <div class="card-head"><h3>Supply network map</h3><span class="muted">Our assets and the mills we supply</span></div>
-          <div id="dash-map" class="map map-sm"></div>
-          <div class="legend" data-legend></div>
-        </div>
-        <div class="card">
-          <div class="card-head"><h3>Assets by type</h3></div>
-          <div class="type-list" id="dash-types"></div>
-        </div>
-      </div>
-      <div class="card">
-        <div class="card-head"><h3>From wood to industrial biomass</h3><span class="muted">How material moves through our supply chain</span></div>
-        <div class="flow" data-flow></div>
-      </div>
     </div>
 
     <!-- Supply network map -->
     <div class="page" data-page="network">
       <div class="page-head"><h2>Our supply network</h2><span class="muted">Every location is our own sourcing, processing, aggregation or logistics asset</span></div>
-      <div class="filters card">
-        <div class="filter-row"><span class="filter-label">Asset type</span><div class="chips" id="f-type"></div></div>
-        <div class="filter-row"><span class="filter-label">Material</span><div class="chips" id="f-material"></div></div>
-        <div class="filter-row"><span class="filter-label">Product type</span><div class="chips" id="f-form"></div></div>
-        <div class="filter-row"><span class="filter-label">Search</span><input id="f-search" type="search" placeholder="Asset, region, district or state"></div>
+      <div class="filter-bar">
+        <select id="f-type" aria-label="Asset type"></select>
+        <select id="f-material" aria-label="Material"></select>
+        <select id="f-form" aria-label="Product type"></select>
+        <input id="f-search" type="search" placeholder="Search" aria-label="Search assets">
       </div>
       <div class="map-grid">
         <div class="card map-card">
@@ -149,9 +141,9 @@ if ($admin) {
     <!-- Logistics -->
     <div class="page" data-page="logistics">
       <div class="page-head"><h2>Logistics &amp; supply routes</h2><span class="muted">Pick a product and a customer to trace how it reaches the mill</span></div>
-      <div class="filters card">
-        <div class="filter-row"><span class="filter-label">Product</span><select id="l-product"></select></div>
-        <div class="filter-row"><span class="filter-label">Customer</span><select id="l-customer"></select></div>
+      <div class="filter-bar">
+        <select id="l-product" aria-label="Product"></select>
+        <select id="l-customer" aria-label="Customer"></select>
       </div>
       <div class="map-grid">
         <div class="card map-card">
@@ -159,7 +151,7 @@ if ($admin) {
         </div>
         <aside class="card side-panel" id="route-panel"></aside>
       </div>
-      <div class="kpis" id="log-kpis"></div>
+      <div class="stats-row" id="log-kpis"></div>
     </div>
 
     <!-- Customers -->
@@ -180,23 +172,25 @@ if ($admin) {
       <div class="about-grid">
         <div class="card prose" id="about-body"></div>
         <div class="card" id="about-contact"></div>
+        <div class="card about-org"><div class="card-head"><h3>How we are organised</h3></div><div class="hero-org" id="hero-org"></div></div>
       </div>
     </div>
 
     <?php if ($admin): ?>
     <div class="page" data-page="admin">
-      <div class="page-head"><h2>Supply network management</h2></div>
-      <div class="card">
+      <div class="page-head"><h2>Admin</h2></div>
+      <div class="segmented" id="admin-tabs"><button type="button" data-admin-tab="assets">Assets</button><button type="button" data-admin-tab="customers">Customers</button><button type="button" data-admin-tab="supply">Supply data</button><button type="button" data-admin-tab="routes">Road routes</button><button type="button" data-admin-tab="content">Site content</button><button type="button" data-admin-tab="users">Users</button></div>
+      <div class="card" data-admin-section="assets">
         <div class="card-head"><h3>Assets</h3><span class="muted">Locations, capabilities, products handled and outgoing routes</span>
           <button class="btn btn-primary head-btn" data-add-asset type="button">+ Add asset</button></div>
         <div class="table-wrap"><table class="table" id="admin-assets"></table></div>
       </div>
-      <div class="card">
+      <div class="card" data-admin-section="customers">
         <div class="card-head"><h3>Customers</h3><span class="muted">Destinations, products supplied and monthly supply history</span>
           <button class="btn btn-primary head-btn" data-add-customer type="button">+ Add customer</button></div>
         <div class="table-wrap"><table class="table" id="admin-customers"></table></div>
       </div>
-      <div class="card">
+      <div class="card" data-admin-section="supply">
         <div class="card-head"><h3>Supply data</h3><span class="muted">Import the dispatch log book (.xlsx). Only monthly totals are stored, never truck, driver, transporter or payment details.</span></div>
         <div class="import-box">
           <form id="import-form" class="inline-form">
@@ -208,18 +202,18 @@ if ($admin) {
           <div id="import-current"></div>
         </div>
       </div>
-      <div class="card">
+      <div class="card" data-admin-section="routes">
         <div class="card-head"><h3>Road routes</h3><span class="muted">Truck routes by road, calculated once per supply link and stored</span>
           <button class="btn head-btn" data-routes-refresh type="button">Calculate missing routes</button>
           <button class="btn" data-routes-refresh="force" type="button">Recalculate all</button></div>
         <p class="error" id="routes-error" style="padding:0 18px"></p>
         <div class="table-wrap"><table class="table" id="admin-routes"></table></div>
       </div>
-      <div class="card">
+      <div class="card" data-admin-section="content">
         <div class="card-head"><h3>Site content</h3><span class="muted">Text shown on the Dashboard, Sustainability and About Us pages</span></div>
         <form id="content-form" class="content-form"></form>
       </div>
-      <div class="card">
+      <div class="card" data-admin-section="users">
         <div class="card-head"><h3>User accounts</h3><span class="muted">Admins see everything. Viewers (customers) see the network with internal site details hidden.</span></div>
         <form id="user-form" class="inline-form">
           <input name="username" placeholder="Username" required>

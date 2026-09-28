@@ -280,7 +280,7 @@
       const pts = l.road && l.road.length > 1 ? l.road : curve(from, to);
       if (on) { involved.add(`a${l.from}`); involved.add(l.toAsset ? `a${l.toAsset}` : `c${l.toCustomer}`); }
       const line = L.polyline(pts, {
-        color: highlight && on ? '#1b3478' : '#2f6fe4',
+        color: highlight && on ? '#14532d' : '#2a7d52',
         weight: highlight && on ? 4 : 2.5,
         opacity: on ? 0.85 : 0.15,
         className: on ? (l.road ? 'route road' : 'route') : '',
@@ -373,27 +373,18 @@
       <div class="org-node org-mid">${ICON.logistics}<span>Dispatch &amp; logistics</span></div>
       <div class="org-branches">${D().customers.map((cu) => `<div class="org-node org-cust">${ICON.customer}<b>${esc(cu.name)}</b></div>`).join('')}</div>`;
 
-    const paths = allPaths();
+    const log = supplyStats(D().supplyLog);
     const procCap = sum(active.filter((a) => ['chipping', 'processing'].includes(a.type)), (a) => a.capacityMt);
-    const monthlySupply = sum(D().customers, (cu) => cu.monthlyVolumeMt);
-    const items = Object.entries(D().assetTypes).filter(([t]) => count(t) > 0).map(([t, info]) => [info.plural, fmt(count(t)), '', ICON[t], info.color]);
-    items.push(['Active supply routes', fmt(paths.length), '', ICON.route]);
-    items.push(['Products', fmt(D().products.length), '', ICON.box]);
-    items.push(['Customers', fmt(D().customers.length), '', ICON.customer]);
-    if (monthlySupply) items.push(['Monthly supply', fmt(monthlySupply), 'MT', ICON.scale]);
-    else if (procCap) items.push(['Processing capacity', fmt(procCap), 'MT / month', ICON.scale]);
-    $('#kpis').innerHTML = items.map(([label, value, unit, icon, color]) => `
-      <div class="kpi"><div class="kpi-ico" ${color ? `style="--c:${esc(color)}"` : ''}>${icon}</div><div class="kpi-label">${esc(label)}</div>
-      <div class="kpi-value">${value}${unit ? `<small>${esc(unit)}</small>` : ''}</div></div>`).join('');
-
-    $('#dash-types').innerHTML = Object.entries(D().assetTypes).map(([t, info]) => {
-      const n = count(t);
-      return n ? `<a class="type-row" href="#assets" data-type-jump="${esc(t)}"><span class="lg-ico big" style="--c:${esc(info.color)}">${ICON[t]}</span>
-        <span><b>${esc(info.plural)}</b><br><span class="muted">${esc(active.filter((a) => a.type === t).map((a) => a.region).join(', '))}</span></span>
-        <span class="type-count">${n}</span></a>` : '';
-    }).join('') + `<a class="type-row" href="#customers"><span class="lg-ico big sq">${ICON.customer}</span>
-        <span><b>Customer destinations</b><br><span class="muted">${esc(D().customers.map((cu) => cu.name).join(', '))}</span></span>
-        <span class="type-count">${D().customers.length}</span></a>`;
+    const typesInUse = Object.entries(D().assetTypes).filter(([t]) => count(t) > 0);
+    const items = [
+      ['Network assets', fmt(active.length), typesInUse.map(([t, i]) => `${count(t)} ${i.plural.toLowerCase()}`).join(' · ')],
+      ['Supply routes', fmt(allPaths().length), `to ${D().customers.map((cu) => cu.name).join(' and ')}`],
+      log.trucks ? ['Delivered', `${fmt(Math.round(log.delivered))}<small>MT</small>`, `${fmt(log.trucks)} trucks · ${log.period}`]
+        : ['Processing capacity', `${fmt(procCap)}<small>MT / month</small>`, 'chipping & processing'],
+      ['Products', fmt(D().products.length), `${D().materials.length} wood species`],
+    ];
+    $('#kpis').innerHTML = items.map(([label, value, note]) => `
+      <div class="stat-tile"><div class="kpi-label">${esc(label)}</div><div class="kpi-value">${value}</div><div class="stat-note">${esc(note)}</div></div>`).join('');
   }
 
   function renderFlow() {
@@ -430,15 +421,13 @@
   function renderNetFilters() {
     const f = state.net;
     const types = uniq(D().assets.map((a) => a.type));
-    const chip = (group, value, label, extra = '') =>
-      `<button class="chip ${f[group] === value ? 'active' : ''}" data-filter="${group}" data-value="${esc(value ?? '')}" type="button">${extra}${esc(label)}</button>`;
-    $('#f-type').innerHTML = chip('type', null, 'All') +
-      Object.entries(D().assetTypes).filter(([t]) => types.includes(t)).map(([t, info]) => chip('type', t, info.plural, `<span class="chip-ico" style="--c:${esc(info.color)}">${ICON[t]}</span>`)).join('') +
-      chip('type', 'customer', 'Customers', `<span class="chip-ico sq">${ICON.customer}</span>`);
-    $('#f-material').innerHTML = chip('material', null, 'All') +
-      D().materials.map((m) => chip('material', m.id, m.name, `<span class="dot" style="background:${esc(m.color)}"></span>`)).join('');
-    $('#f-form').innerHTML = chip('form', null, 'All') + Object.entries(D().productForms).map(([k, v]) => chip('form', k, v)).join('');
+    const opts = (all, list, value) => `<option value="">${esc(all)}</option>` +
+      list.map(([v, l]) => `<option value="${esc(v)}" ${value === v ? 'selected' : ''}>${esc(l)}</option>`).join('');
+    $('#f-type').innerHTML = opts('All asset types', [...Object.entries(D().assetTypes).filter(([t]) => types.includes(t)).map(([t, i]) => [t, i.plural]), ['customer', 'Customers']], f.type);
+    $('#f-material').innerHTML = opts('All materials', D().materials.map((m) => [m.id, m.name]), f.material);
+    $('#f-form').innerHTML = opts('All product types', Object.entries(D().productForms), f.form);
   }
+
 
   function drawNetMap(fit) {
     const m = getMap('net-map');
@@ -555,7 +544,7 @@
         </div>
         <div class="card">
           <div class="card-head"><h3>Capabilities</h3></div>
-          <ul class="cap-list">${Object.entries(D().capabilities).map(([k, label]) => `<li class="${a.capabilities.includes(k) ? 'on' : ''}">${a.capabilities.includes(k) ? ICON.check : '<span class="off-dot"></span>'}${esc(label)}</li>`).join('')}</ul>
+          <ul class="cap-list">${a.capabilities.map((k) => `<li class="on">${ICON.check}${esc(D().capabilities[k] || k)}</li>`).join('') || '<li class="muted">None recorded yet.</li>'}</ul>
         </div>
       </div>
       <div class="card">
@@ -605,7 +594,7 @@
     const procAssets = D().assets.filter((a) => ['chipping', 'processing'].includes(a.type) || a.capabilities.some((c) => ['debarking', 'chipping', 'screening'].includes(c)));
     $('#cap-grid').innerHTML = Object.entries(D().capabilities).map(([k, label]) => {
       const n = D().assets.filter((a) => a.capabilities.includes(k)).length;
-      return `<div class="card cap-card ${n ? '' : 'muted-card'}"><b>${esc(label)}</b><p>${esc(CAP_INFO[k] || '')}</p><span class="muted">${n ? `${n} asset${n > 1 ? 's' : ''}` : 'Not yet in network'}</span></div>`;
+      return n ? `<div class="card cap-card"><b>${esc(label)}</b><p>${esc(CAP_INFO[k] || '')}</p><span class="muted">${n} asset${n > 1 ? 's' : ''}</span></div>` : '';
     }).join('');
     $('#proc-sub').textContent = `${procAssets.length} assets · ${fmt(sum(procAssets, (a) => a.capacityMt))} MT / month combined capacity`;
     $('#proc-table').innerHTML = `
@@ -666,8 +655,8 @@
       items.push(['Trucks delivered', fmt(log.trucks), log.period ? `· ${log.period}` : '', ICON.logistics]);
       if (log.transitAvg != null) items.push(['Recorded dispatch → mill', log.transitAvg.toFixed(1), 'days', ICON.check]);
     }
-    $('#log-kpis').innerHTML = items.map(([label, value, unit, icon]) => `
-      <div class="kpi"><div class="kpi-ico">${icon}</div><div class="kpi-label">${esc(label)}</div><div class="kpi-value">${value}${unit ? `<small>${esc(unit)}</small>` : ''}</div></div>`).join('');
+    $('#log-kpis').innerHTML = items.slice(0, 4).map(([label, value, unit]) => `
+      <div class="stat-tile"><div class="kpi-label">${esc(label)}</div><div class="kpi-value">${value}${unit ? `<small>${esc(unit)}</small>` : ''}</div></div>`).join('');
 
     if (currentPage() === 'logistics') {
       const m = getMap('log-map');
@@ -690,7 +679,8 @@
   }
 
   // ---------- Supply record (imported dispatch log) ----------
-  const SERIES_COLORS = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#4a3aa7', '#e34948'];
+  // Validated for colour-vision deficiency: forest green + amber first, then the reference categorical order.
+  const SERIES_COLORS = ['#2a7d52', '#e39a1c', '#2a78d6', '#e87ba4', '#4a3aa7', '#e34948'];
   const monthName = (m, long) => new Date(m + '-01T00:00:00').toLocaleString('en-IN', { month: long ? 'long' : 'short', year: long ? 'numeric' : undefined });
   function seriesLabels() { return uniq(D().supplyLog.map((r) => r.label)).sort(); }
   const seriesColor = (label) => SERIES_COLORS[Math.max(0, seriesLabels().indexOf(label)) % SERIES_COLORS.length];
@@ -718,7 +708,7 @@
     const labels = uniq(rows.map((r) => r.label)).sort();
     const val = (m, l) => sum(rows.filter((r) => r.month === m && r.label === l), (r) => r.deliveredMt);
     const trucksIn = (m) => sum(rows.filter((r) => r.month === m), (r) => r.trucks);
-    const W = 640, H = 220, pad = { l: 48, r: 8, t: 12, b: 26 };
+    const W = 900, H = 260, pad = { l: 48, r: 8, t: 12, b: 26 };
     const totals = months.map((m) => sum(labels, (l) => val(m, l)));
     const max = Math.max(...totals, 1);
     const step = Math.pow(10, Math.floor(Math.log10(max)));
@@ -753,18 +743,6 @@
       </table></div></details>`;
   }
 
-  function supplyKpis(st) {
-    const items = [
-      ['Delivered', fmt(Math.round(st.delivered)), 'MT'],
-      ['Trucks delivered', fmt(st.trucks), ''],
-      ['Average per month', fmt(Math.round(st.monthlyAvg)), 'MT'],
-      ['Average load', st.avgLoad.toFixed(1), 'MT / truck'],
-    ];
-    if (st.transitAvg != null) items.push(['Dispatch → mill', st.transitAvg.toFixed(1), 'days']);
-    if (isAdmin() && st.lossPct != null) items.push(['Transit weight loss', st.lossPct.toFixed(1), '% · admin only']);
-    return `<div class="kpis kpis-4">${items.map(([l, v, u]) => `<div class="kpi"><div class="kpi-label">${esc(l)}</div><div class="kpi-value">${v}${u ? `<small>${esc(u)}</small>` : ''}</div></div>`).join('')}</div>`;
-  }
-
   function renderSupplyRecord() {
     const el = $('#supply-record');
     const rows = D().supplyLog;
@@ -773,8 +751,12 @@
     const byCustomer = uniq(rows.map((r) => r.customer)).map(customerById).filter(Boolean);
     const st = supplyStats(rows);
     el.innerHTML = `<div class="card-head"><h3>Supply record</h3><span class="muted">Deliveries to ${esc(byCustomer.map((c) => c.name).join(', '))} · ${esc(st.period)}</span>
-        <a class="btn head-btn" href="#customers">Customer details</a></div>
-      <div class="supply-body">${supplyKpis(st)}<div>${supplyChart(st, 'Monthly tonnes delivered')}</div></div>`;
+        <a class="head-link" href="#customers">Customer details →</a></div>
+      <div class="supply-body"><div class="mini-stats">
+        <div><span>Average per month</span><b>${fmt(Math.round(st.monthlyAvg))} MT</b></div>
+        <div><span>Average load</span><b>${st.avgLoad.toFixed(1)} MT / truck</b></div>
+        ${st.transitAvg != null ? `<div><span>Dispatch to mill</span><b>${st.transitAvg.toFixed(1)} days</b></div>` : ''}
+      </div><div>${supplyChart(st, 'Monthly tonnes delivered')}</div></div>`;
   }
 
   // ---------- Customers ----------
@@ -819,22 +801,29 @@
           <div><h3>${esc(c.name)}</h3><div class="muted">${esc(c.industry)}${c.industry ? ' · ' : ''}${esc(c.place)}</div></div>
           <button class="btn head-btn" data-trace="${esc(c.id)}" type="button">Trace supply routes</button>
         </div>
-        <div class="kpis kpis-4">
-          <div class="kpi"><div class="kpi-label">${log.trucks ? 'Average monthly supply' : 'Monthly supply'}</div><div class="kpi-value">${monthly ? fmt(Math.round(monthly)) + '<small>MT</small>' : '–'}</div></div>
-          <div class="kpi"><div class="kpi-label">Trucks / month</div><div class="kpi-value">${dispatches ? fmt(Math.round(dispatches)) : '–'}</div></div>
-          <div class="kpi"><div class="kpi-label">Supplying since</div><div class="kpi-value ${since && String(since).length > 4 ? 'kv-sm' : ''}">${esc(since ?? '–')}</div></div>
-          <div class="kpi"><div class="kpi-label">Supply routes</div><div class="kpi-value">${ps.length}</div></div>
-        </div>
+        <div class="stats-row compact">${(log.trucks ? [
+            ['Delivered', `${fmt(Math.round(log.delivered))}<small>MT</small>`, `${fmt(log.trucks)} trucks · ${log.period}`],
+            ['Average per month', `${fmt(Math.round(log.monthlyAvg))}<small>MT</small>`, `${fmt(Math.round(dispatches))} trucks a month`],
+            ['Average load', `${log.avgLoad.toFixed(1)}<small>MT</small>`, 'per truck'],
+            log.transitAvg != null ? ['Dispatch to mill', `${log.transitAvg.toFixed(1)}<small>days</small>`, 'average transit'] : ['Supply routes', fmt(ps.length), ''],
+          ] : [
+            ['Monthly supply', monthly ? `${fmt(Math.round(monthly))}<small>MT</small>` : '–', ''],
+            ['Trucks / month', dispatches ? fmt(Math.round(dispatches)) : '–', ''],
+            ['Supplying since', esc(since ?? '–'), ''],
+            ['Supply routes', fmt(ps.length), ''],
+          ]).filter(([, v]) => v !== '–').map(([l, v, n]) => `<div class="stat-tile"><div class="kpi-label">${esc(l)}</div><div class="kpi-value">${v}</div>${n ? `<div class="stat-note">${esc(n)}</div>` : ''}</div>`).join('')}</div>
         <div class="customer-body">
           <div>
             <div class="section-title">Materials supplied</div>
             <ul class="prod-list">${prods.map((p) => `<li><span>${esc(p.name)}</span><span class="form-badge ${esc(p.form)}">${esc(formLabel(p.form))}</span></li>`).join('') || '<li class="muted">–</li>'}</ul>
-            <div class="section-title" style="margin-top:16px">Connected network assets</div>
-            <div class="chip-wrap">${connected.map(assetChip).join('') || '<span class="muted">–</span>'}</div>
-            ${ps.length ? `<div class="section-title" style="margin-top:16px">Supply routes</div>${ps.map((p) => `<div class="path-row">${chain(p)}<span class="muted">${distLabel(p)}</span></div>`).join('')}` : ''}
+            <details class="more"><summary>Supply routes and connected assets (${ps.length})</summary>
+              <div class="chip-wrap">${connected.map(assetChip).join('') || '<span class="muted">–</span>'}</div>
+              ${ps.map((p) => `<div class="path-row">${chain(p)}<span class="muted">${distLabel(p)}</span></div>`).join('')}
+            </details>
           </div>
-          <div>${log.trucks
-            ? `<div class="section-title">Deliveries recorded · ${esc(log.period)}</div>${supplyKpis(log)}${supplyChart(log, `Monthly tonnes delivered to ${c.name}`)}`
+          <div>${!log.trucks && !c.history.length && !isAdmin() ? '' : log.trucks
+            ? `<div class="section-title">Monthly deliveries</div>${supplyChart(log, `Monthly tonnes delivered to ${c.name}`)}
+               ${isAdmin() && log.lossPct != null ? `<p class="muted small">Transit weight loss ${log.lossPct.toFixed(1)}% (admins only)</p>` : ''}`
             : `<div class="section-title">Supply history (MT per month)</div>${historyChart(c)}`}</div>
         </div>
       </section>`;
@@ -902,6 +891,12 @@
     renderUsers();
     renderRoutesAdmin();
     renderImportCurrent();
+  }
+
+  function showAdminTab(key) {
+    state.adminTab = key;
+    $$('[data-admin-section]').forEach((el) => { el.hidden = el.dataset.adminSection !== key; });
+    $$('#admin-tabs button').forEach((b) => b.classList.toggle('active', b.dataset.adminTab === key));
   }
 
   function renderRoutesAdmin() {
@@ -1104,14 +1099,18 @@
     if (!pages.includes(page)) page = 'dashboard';
     $$('.page').forEach((p) => { p.hidden = p.dataset.page !== page; });
     const tab = page === 'asset' ? 'assets' : page;
-    $$('#tabs a').forEach((a) => a.classList.toggle('active', a.dataset.tab === tab));
+    const sub = $(`.subnav [data-page-link="${tab}"]`)?.closest('.subnav');
+    const group = sub ? sub.dataset.subnav : tab;
+    $$('#tabs a').forEach((a) => a.classList.toggle('active', a.dataset.group === group));
+    $$('.subnav').forEach((n) => { n.hidden = n !== sub; });
+    $$('.subnav a').forEach((a) => a.classList.toggle('active', a.dataset.pageLink === tab));
     window.scrollTo({ top: 0 });
     // Leaflet needs a visible container, so maps are drawn when their page is shown.
     if (page === 'dashboard') { drawDashMap(); maps['dash-map'].map.invalidateSize(); }
     if (page === 'network') { drawNetMap(false); maps['net-map'].map.invalidateSize(); }
     if (page === 'logistics') { renderLogistics(); maps['log-map'].map.invalidateSize(); }
     if (page === 'asset') renderAssetProfile(Number(location.hash.split('/')[1]));
-    if (page === 'admin') loadUsers().catch((e) => { $('#user-error').textContent = e.message; });
+    if (page === 'admin') { showAdminTab(state.adminTab || 'assets'); loadUsers().catch((e) => { $('#user-error').textContent = e.message; }); }
     $('#tabs .active')?.scrollIntoView({ block: 'nearest', inline: 'center' });
   }
 
@@ -1133,10 +1132,11 @@
     window.addEventListener('hashchange', showPage);
 
     document.addEventListener('click', async (e) => {
-      const t = e.target.closest('[data-routes-refresh],[data-import-commit],[data-import-clear],[data-filter],[data-select],[data-back],[data-material-map],[data-type-jump],[data-trace],[data-customer-link],[data-add-asset],[data-edit-asset],[data-delete-asset],[data-save-asset],[data-add-customer],[data-edit-customer],[data-delete-customer],[data-save-customer],[data-add-row],[data-remove-row],[data-user-delete],[data-reset]');
+      const t = e.target.closest('[data-admin-tab],[data-routes-refresh],[data-import-commit],[data-import-clear],[data-filter],[data-select],[data-back],[data-material-map],[data-type-jump],[data-trace],[data-customer-link],[data-add-asset],[data-edit-asset],[data-delete-asset],[data-save-asset],[data-add-customer],[data-edit-customer],[data-delete-customer],[data-save-customer],[data-add-row],[data-remove-row],[data-user-delete],[data-reset]');
       if (!t) return;
       const ds = t.dataset;
-      if (ds.filter) { state.net[ds.filter] = ds.value || null; if (ds.filter === 'type' && ds.value === 'customer') state.net.selected = null; refreshNetwork(true); }
+      if (ds.adminTab) showAdminTab(ds.adminTab);
+      else if (ds.filter) { state.net[ds.filter] = ds.value || null; if (ds.filter === 'type' && ds.value === 'customer') state.net.selected = null; refreshNetwork(true); }
       else if (ds.select) selectNetAsset(Number(ds.select));
       else if (ds.back !== undefined) { state.net.selected = null; renderSidePanel(); drawNetMap(true); }
       else if (ds.materialMap) { Object.assign(state.net, { material: ds.materialMap, type: null, form: null, selected: null }); refreshNetwork(true); location.hash = 'network'; }
@@ -1206,6 +1206,11 @@
     });
 
     let timer;
+    ['type', 'material', 'form'].forEach((k) => $(`#f-${k}`).addEventListener('change', (e) => {
+      state.net[k] = e.target.value || null;
+      if (k === 'type' && e.target.value === 'customer') state.net.selected = null;
+      refreshNetwork(true);
+    }));
     $('#f-search').addEventListener('input', (e) => {
       clearTimeout(timer);
       timer = setTimeout(() => { state.net.search = e.target.value; state.net.selected = null; refreshNetwork(true); }, 150);
